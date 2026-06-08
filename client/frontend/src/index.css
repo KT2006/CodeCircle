@@ -1,0 +1,30 @@
+@import "tailwindcss";
+/* src/index.css – colour palette for the heatmap */
+.color-empty { fill: #2d2d2d; }   /* gray for days with no activity */
+
+.color-g1 { fill: #0e4429; }
+.color-g2 { fill: #006d32; }
+.color-g3 { fill: #26a641; }
+.color-g4 { fill: #39d353; }
+.color-g5 { fill: #58e38c; }
+
+/* optional: make the tooltip a little nicer (if you use a tooltip lib) */
+[data-tip] {
+  position: relative;
+}
+[data-tip]::after {
+  content: attr(data-tip);
+  position: absolute;
+  bottom: 120%;
+  left: 50%;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  background: #333;
+  color: #fff;
+  padding: 3px 6px;
+  border-radius: 3px;
+  font-size: 0.75rem;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+[data-tip]:hover::after { opacity: 1; }
