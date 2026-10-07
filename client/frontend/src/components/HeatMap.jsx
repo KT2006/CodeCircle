@@ -34,21 +34,19 @@ const classForValue = (value) => {
  *  3️⃣  The component itself.
  * ------------------------------------------------------------------ */
 const HeatMap = () => {
-  const today = new Date()
+  const currentYear = new Date().getFullYear()
 
-  // One year ago (exactly 365 days before today). Adjust the “-11”
-  // if you want a different window (e.g., 6 months → -5).
-  const startDate = new Date(
-    today.getFullYear() - 1,
-    today.getMonth(),
-    today.getDate()
-  )
+  // Jan 1st of the current year (months are 0-indexed)
+  const startDate = new Date(currentYear, 0, 1)
+
+  // Dec 31st of the current year
+  const endDate = new Date(currentYear, 11, 31)
 
   return (
     <div className="w-full h-full flex items-center">
       <CalendarHeatmap
         startDate={startDate}
-        endDate={today}
+        endDate={endDate}
         values={values}
         classForValue={classForValue}
         // Optional: show a tooltip with the raw count when hovering.

@@ -1,13 +1,35 @@
 {
   "name": "server",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "CodeCircle API server",
+  "main": "src/server.js",
+  "type": "module",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "dev": "nodemon src/server.js",
+    "start": "node src/server.js",
+    "lint": "eslint src/",
+    "migrate": "node-pg-migrate --migrations-dir src/db/migrations",
+    "migrate:up": "node-pg-migrate up --migrations-dir src/db/migrations",
+    "migrate:down": "node-pg-migrate down --migrations-dir src/db/migrations",
+    "migrate:create": "node-pg-migrate create --migrations-dir src/db/migrations"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "type": "commonjs"
+  "dependencies": {
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "node-pg-migrate": "^9.0.0",
+    "pg": "^8.23.1",
+    "pino": "^9.7.0",
+    "pino-pretty": "^13.0.0",
+    "zod": "^3.25.71"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.5",
+    "eslint": "^9.39.5",
+    "globals": "^16.3.0",
+    "nodemon": "^3.1.14"
+  }
 }

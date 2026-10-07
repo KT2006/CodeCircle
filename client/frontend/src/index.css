@@ -1,13 +1,50 @@
 @import "tailwindcss";
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+  background: #050816;
+}
+
+body {
+  margin: 0;
+}
+
 /* src/index.css – colour palette for the heatmap */
-.color-empty { fill: #2d2d2d; }   /* gray for days with no activity */
+.react-calendar-heatmap .color-empty { fill: #2d3748 !important; }   /* solid dark gray */
 
-.color-g1 { fill: #0e4429; }
-.color-g2 { fill: #006d32; }
-.color-g3 { fill: #26a641; }
-.color-g4 { fill: #39d353; }
-.color-g5 { fill: #58e38c; }
+/* The vibrant neon green scale from the reference image */
+.react-calendar-heatmap .color-g1 { fill: #0d4a22 !important; }
+.react-calendar-heatmap .color-g2 { fill: #147634 !important; }
+.react-calendar-heatmap .color-g3 { fill: #1fa447 !important; }
+.react-calendar-heatmap .color-g4 { fill: #2ad15a !important; }
+.react-calendar-heatmap .color-g5 { fill: #3dfb6c !important; filter: drop-shadow(0 0 2px rgba(61, 251, 108, 0.4)); }
 
+/* Style the individual SVG squares to look like the image */
+.react-calendar-heatmap rect {
+  rx: 3px;
+  ry: 3px;
+  stroke: #0C1324; /* Add a stroke that matches your background to create the visual gap */
+  stroke-width: 1.5px;
+  transition: all 0.2s ease-in-out;
+}
+
+.react-calendar-heatmap rect:hover {
+  stroke: #fff;
+  stroke-width: 1px;
+}
+
+/* Style the Month and Weekday labels */
+.react-calendar-heatmap text {
+  fill: #94a3b8; /* Soft slate gray */
+  font-size: 8px;
+  font-family: inherit;
+}
 /* optional: make the tooltip a little nicer (if you use a tooltip lib) */
 [data-tip] {
   position: relative;
