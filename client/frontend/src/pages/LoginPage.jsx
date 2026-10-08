@@ -1,9 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth/useAuth'
 import logo from '../assets/logo.png'
 import fullcircle from '../assets/full_circle.png'
-import google from '../assets/google.png'
 
 // const LoginPage = () => {
 //     return (
@@ -47,6 +46,7 @@ import google from '../assets/google.png'
 //   }
 const LoginPage = () => {
   const [isGoogleReady, setIsGoogleReady] = useState(false)
+  const googleButtonRef = useRef(null)
   const navigate = useNavigate()
   const { googleClientId, error, isLoading, setError, signInWithGoogle } = useAuth()
 
@@ -71,6 +71,15 @@ const LoginPage = () => {
             setError(signInError instanceof Error ? signInError.message : 'Google sign-in failed.')
           }
         },
+      })
+      if (!googleButtonRef.current) return
+      window.google.accounts.id.renderButton(googleButtonRef.current, {
+        theme: 'filled_black',
+        size: 'large',
+        text: 'signin_with',
+        shape: 'rectangular',
+        logo_alignment: 'left',
+        width: 320,
       })
       setIsGoogleReady(true)
     }
@@ -98,22 +107,6 @@ const LoginPage = () => {
       script?.removeEventListener('load', initializeGoogleSignIn)
     }
   }, [googleClientId, isLoading, navigate, setError, signInWithGoogle])
-
-  const handleGoogleSignIn = () => {
-    if (!isGoogleReady || !window.google?.accounts?.id) {
-      setError('Google sign-in is still loading. Please try again in a moment.')
-      return
-    }
-
-    setError('')
-    window.google.accounts.id.prompt((notification) => {
-      if (notification.isNotDisplayed()) {
-        setError('Google sign-in could not be displayed. Check your browser settings and try again.')
-      } else if (notification.isSkippedMoment()) {
-        setError('Google sign-in was closed before completing.')
-      }
-    })
-  }
 
   return (
     <>
@@ -143,15 +136,10 @@ const LoginPage = () => {
         <div className="bottom mt-3 flex w-full max-w-sm flex-col items-center justify-center gap-4 text-white">
             {googleClientId
               ? (
-                <button
-                  type="button"
-                  onClick={handleGoogleSignIn}
-                  disabled={!isGoogleReady}
-                  className="flex w-full items-center justify-center gap-4 rounded-2xl border border-gray-500 bg-[#3C3F4A] px-8 py-3 text-xl font-semibold text-white outline-none transition-colors hover:bg-[#4a4d58] disabled:cursor-wait disabled:opacity-70 sm:px-12 sm:text-2xl"
-                >
-                  <img className="h-8 w-8 shrink-0 sm:h-10 sm:w-10" src={google} alt="" />
-                  <span>Sign in With Google</span>
-                </button>
+                <div className="flex min-h-10 w-full justify-center">
+                  {!isGoogleReady && <span className="sr-only">Loading Google sign-in…</span>}
+                  <div ref={googleButtonRef} />
+                </div>
               )
               : <p className="text-center text-sm text-amber-200">
                 {isLoading ? 'Loading sign-in…' : 'Google sign-in is not configured.'}
