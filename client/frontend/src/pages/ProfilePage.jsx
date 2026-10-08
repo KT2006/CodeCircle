@@ -894,61 +894,60 @@ const ProfilePage = () => {
         <div className="space-y-5">
 
           {/* Profile header */}
-          <Card className="p-5">
-            <div className="flex flex-wrap items-start gap-4">
-              <div className="relative shrink-0">
-                <div className="flex h-16 w-16 items-center justify-center rounded-full bg-[radial-gradient(circle_at_30%_30%,#8B5CF6,#5B21B6_78%)] text-2xl font-bold text-white shadow-[0_0_28px_rgba(124,58,237,0.4)]">
-                  {avatarLetter}
+          <Card className="p-4 sm:p-5">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
+              <div className="flex min-w-0 items-start gap-4">
+                <div className="relative shrink-0">
+                  <div className="flex h-16 w-16 items-center justify-center rounded-full bg-[radial-gradient(circle_at_30%_30%,#8B5CF6,#5B21B6_78%)] text-2xl font-bold text-white shadow-[0_0_28px_rgba(124,58,237,0.4)]">
+                    {avatarLetter}
+                  </div>
+                  <span className={`absolute bottom-0.5 right-0.5 block h-3 w-3 rounded-full border-2 border-[#0e1527] ${hasData ? 'bg-emerald-400' : 'bg-slate-500'}`} />
                 </div>
-                <span className={`absolute bottom-0.5 right-0.5 block h-3 w-3 rounded-full border-2 border-[#0e1527] ${hasData ? 'bg-emerald-400' : 'bg-slate-500'}`} />
-              </div>
 
-              <div className="min-w-0 flex-1">
-                <h1 className="text-2xl font-bold text-white">{displayName}</h1>
-                <div className="mt-0.5 flex flex-wrap items-center gap-2">
+                <div className="min-w-0 flex-1">
+                  <h1 className="break-words text-xl font-bold text-white sm:text-2xl">{displayName}</h1>
                   {rankTitle && (
-                    <span className="rounded-full bg-violet-500/15 px-2 py-0.5 text-xs font-medium text-violet-300">{rankTitle}</span>
-                  )}
-                  {connectedProfiles.map(p => (
-                    <span key={p.platform} className="text-xs text-slate-500">
-                      {PLATFORM_CONFIG.find(c => c.id === p.platform)?.label}: {p.username}
-                    </span>
-                  ))}
-                </div>
-                <div className="mt-1.5 flex items-center gap-2 text-xs text-slate-400">
-                  <span className={`h-2 w-2 rounded-full ${hasData ? 'bg-emerald-400' : 'bg-slate-500'}`} />
-                  {hasData
-                    ? <span className="text-emerald-400">Connected</span>
-                    : <span className="text-slate-500">No platforms connected</span>
-                  }
-                  {lastFetchedLabel && (
-                    <>
-                      <span className="text-slate-600">•</span>
-                      <Clock className="h-3 w-3" />
-                      <span>Last fetched: {lastFetchedLabel}</span>
-                    </>
+                    <div className="mt-1">
+                      <span className="rounded-full bg-violet-500/15 px-2 py-0.5 text-xs font-medium text-violet-300">{rankTitle}</span>
+                    </div>
                   )}
                 </div>
               </div>
 
-              <div className="flex shrink-0 items-center gap-2">
+              <div className="grid w-full grid-cols-2 gap-2 sm:ml-auto sm:w-auto sm:shrink-0">
                 <button
                   type="button"
                   onClick={handleRefresh}
                   disabled={!hasData || isRefreshing}
-                  className="flex items-center gap-2 rounded-xl border border-white/15 px-3 py-2 text-sm font-medium text-slate-200 transition-colors hover:bg-white/6 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                  className="flex min-w-0 items-center justify-center gap-2 rounded-xl border border-white/15 px-3 py-2 text-sm font-medium text-slate-200 transition-colors hover:bg-white/6 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
-                  {isRefreshing ? 'Refreshing…' : 'Refresh'}
+                  <span className="truncate">{isRefreshing ? 'Refreshing…' : 'Refresh'}</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => navigate('/compare')}
-                  className="flex items-center gap-2 rounded-xl bg-violet-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-violet-500"
+                  className="flex min-w-0 items-center justify-center gap-2 rounded-xl bg-violet-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-violet-500"
                 >
                   Compare
                 </button>
               </div>
+            </div>
+            <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-white/8 pt-3 text-xs">
+              <span className="inline-flex items-center gap-2">
+                <span className={`h-2 w-2 rounded-full ${hasData ? 'bg-emerald-400' : 'bg-slate-500'}`} />
+                {hasData
+                  ? <span className="text-emerald-400">Connected</span>
+                  : <span className="text-slate-500">No platforms connected</span>
+                }
+              </span>
+              {lastFetchedLabel && (
+                <span className="inline-flex items-center gap-1.5 text-slate-400">
+                  <Clock className="h-3 w-3 shrink-0" />
+                  <span>Last fetched</span>
+                  <span className="text-slate-200">{lastFetchedLabel}</span>
+                </span>
+              )}
             </div>
             {fetchError && (
               <p role="alert" className="mt-3 rounded-xl bg-rose-500/10 px-4 py-2 text-sm text-rose-300">{fetchError}</p>
