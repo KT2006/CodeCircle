@@ -1,0 +1,49 @@
+# docker-compose.yml
+#
+# Runs the external services CodeCircle depends on locally.
+# The app itself (Node) runs on your machine via `npm run dev`.
+#
+# Usage:
+#   docker compose up -d        # start in the background
+#   docker compose down         # stop and remove containers
+#   docker compose down -v      # also wipe the data volumes (fresh DB)
+#
+# The named volumes (pgdata, redisdata) persist data between restarts.
+# If you want a completely fresh database, run: docker compose down -v
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: codecircle_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: codecircle
+    ports:
+      - "5432:5432"       # localhost:5432 -> container:5432
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: codecircle_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"       # localhost:6379 -> container:6379
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pgdata:
+  redisdata:

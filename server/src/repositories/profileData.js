@@ -5,7 +5,7 @@ const toInteger = (value) => {
   return Number.isFinite(Number(value)) ? Math.round(Number(value)) : null
 }
 
-export async function saveFetchedProfile(userId, profile) {
+async function saveProfile(profile, linkedUserId = null) {
   const client = await pool.connect()
   try {
     await client.query('BEGIN')
@@ -21,13 +21,15 @@ export async function saveFetchedProfile(userId, profile) {
     )
     const accountId = accountRows[0].id
 
-    await client.query(
-      `INSERT INTO user_accounts (user_id, platform, platform_account_id)
-       VALUES ($1, $2, $3)
-       ON CONFLICT (user_id, platform) DO UPDATE SET
-         platform_account_id = EXCLUDED.platform_account_id`,
-      [userId, profile.platform, accountId],
-    )
+    if (linkedUserId) {
+      await client.query(
+        `INSERT INTO user_accounts (user_id, platform, platform_account_id)
+         VALUES ($1, $2, $3)
+         ON CONFLICT (user_id, platform) DO UPDATE SET
+           platform_account_id = EXCLUDED.platform_account_id`,
+        [linkedUserId, profile.platform, accountId],
+      )
+    }
 
     const { rows: snapshotRows } = await client.query(
       `INSERT INTO account_snapshots (
@@ -206,6 +208,14 @@ export async function saveFetchedProfile(userId, profile) {
   } finally {
     client.release()
   }
+}
+
+export async function saveFetchedProfile(userId, profile) {
+  return saveProfile(profile, userId)
+}
+
+export async function saveFriendProfile(profile) {
+  return saveProfile(profile)
 }
 
 export async function getSavedProfiles(userId) {

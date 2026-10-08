@@ -2,6 +2,7 @@ import LoginPage from './pages/LoginPage'
 import ComparePage from './pages/ComparePage'
 import FeedPage from './pages/FeedPage'
 import FriendsPage from './pages/FriendsPage'
+import FriendProfilePage from './pages/FriendProfilePage'
 import ProfilePage from './pages/ProfilePage'
 import AppShell from './components/AppShell'
 import { AuthProvider } from './auth/AuthContext'
@@ -23,6 +24,7 @@ const AuthenticatedApp = () => {
       <Route element={isLoading ? loadingPage : user ? <AppShell /> : <Navigate to="/" replace />}>
         <Route path="/compare" element={<ComparePage />} />
         <Route path="/friends" element={<FriendsPage />} />
+        <Route path="/friends/:id" element={<FriendProfilePage />} />
         <Route path="/feed" element={<FeedPage />} />
         <Route path="/profile" element={<ProfilePage />} />
       </Route>

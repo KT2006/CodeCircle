@@ -1,0 +1,85 @@
+# .github/workflows/ci.yml
+#
+# Runs on every push and pull request to main.
+# Steps:
+#   1. Spin up Postgres and Redis as service containers
+#   2. Install dependencies
+#   3. Lint
+#   4. Run tests (placeholder until Phase 1 adds real tests)
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: codecircle_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      # These env vars are available to every step in this job
+      NODE_ENV: test
+      PORT: 3000
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/codecircle_test
+      REDIS_URL: redis://localhost:6379
+      JWT_SECRET: ci_test_secret_replace_this_in_production_x
+      GOOGLE_CLIENT_ID: placeholder.apps.googleusercontent.com
+      CORS_ORIGIN: http://localhost:5173
+      REFRESH_COOLDOWN_MINUTES: 15
+      STALE_AFTER_MINUTES: 360
+      SYNC_JOB_ATTEMPTS: 3
+      STUCK_JOB_MINUTES: 10
+      MAX_FRIENDS_PER_USER: 50
+      WORKER_MODE: separate
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+
+      - name: Install server dependencies
+        run: npm ci
+        working-directory: server
+
+      - name: Lint
+        run: npm run lint
+        working-directory: server
+
+      # Placeholder: Phase 1 will add `npm test` once a test runner is installed
+      - name: Test (placeholder)
+        run: echo "No tests yet — Phase 1 will add them"
+        working-directory: server

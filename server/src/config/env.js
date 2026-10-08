@@ -31,10 +31,10 @@ const envSchema = z.object({
     .string()
     .min(1, 'DATABASE_URL is required'),
 
-  // Redis — required in all environments
+  // Redis — optional until the worker/rate-limiter phase uses it
   REDIS_URL: z
     .string()
-    .min(1, 'REDIS_URL is required')
+    .optional()
     .default('redis://localhost:6379'),
 
   // Auth — required (no default; app must not start without these)
