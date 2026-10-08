@@ -3,32 +3,55 @@
  *
  * Protects routes that require a logged-in user.
  *
- * Phase 0 status: STUB — always returns 401.
- * Phase 2 will:
- *   1. Read the httpOnly cookie `cc_session`
- *   2. Verify it as a JWT (using the JWT_SECRET from env)
- *   3. Attach the decoded payload to req.user
- *   4. Call next() if valid, or send 401 if not
- *
  * Why httpOnly cookies instead of localStorage?
  *   JavaScript cannot read httpOnly cookies, so an XSS attack on the frontend
  *   cannot steal the session token. This is the standard approach for web apps.
  */
+
+import jwt from 'jsonwebtoken'
+import env from '../config/env.js'
+
+const COOKIE_NAME = 'cc_session'
+const COOKIE_OPTIONS = {
+  httpOnly: true,
+  secure: env.NODE_ENV === 'production',
+  sameSite: 'lax',
+  path: '/',
+}
 
 /**
  * @param {import('express').Request} req
  * @param {import('express').Response} res
  * @param {import('express').NextFunction} next
  */
-function requireAuth(req, res, _next) {
-  // TODO (Phase 2): verify JWT from httpOnly cookie `cc_session`
-  // For now, every protected route returns 401 so the app boots without crashing.
-  res.status(401).json({
-    error: {
-      code: 'UNAUTHENTICATED',
-      message: 'Authentication not yet implemented (Phase 2)',
-    },
-  })
+function requireAuth(req, res, next) {
+  const token = req.cookies?.[COOKIE_NAME]
+  if (!token) {
+    return res.status(401).json({
+      error: { code: 'UNAUTHENTICATED', message: 'Sign in to continue.' },
+    })
+  }
+
+  try {
+    const payload = jwt.verify(token, env.JWT_SECRET, {
+      algorithms: ['HS256'],
+      audience: 'codecircle-web',
+      issuer: 'codecircle',
+    })
+    if (typeof payload === 'string' || typeof payload.sub !== 'string') {
+      return res.status(401).json({
+        error: { code: 'UNAUTHENTICATED', message: 'Your session is invalid. Sign in again.' },
+      })
+    }
+
+    req.user = { id: payload.sub }
+    return next()
+  } catch {
+    res.clearCookie(COOKIE_NAME, COOKIE_OPTIONS)
+    return res.status(401).json({
+      error: { code: 'UNAUTHENTICATED', message: 'Your session has expired. Sign in again.' },
+    })
+  }
 }
 
 export default requireAuth

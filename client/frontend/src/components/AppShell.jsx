@@ -1,5 +1,6 @@
-import { Link, Outlet, useLocation } from 'react-router-dom'
-import { Scale, Sparkles, UserRound, Users } from 'lucide-react'
+import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom'
+import { LogOut, Scale, Sparkles, UserRound, Users } from 'lucide-react'
+import { useAuth } from '../auth/useAuth'
 import logo from '../assets/logo.png'
 
 const NAV_ITEMS = [
@@ -10,6 +11,17 @@ const NAV_ITEMS = [
 
 const AppShell = () => {
   const { pathname } = useLocation()
+  const navigate = useNavigate()
+  const { error, setError, user, signOut } = useAuth()
+
+  const handleSignOut = async () => {
+    try {
+      await signOut()
+      navigate('/', { replace: true })
+    } catch (signOutError) {
+      setError(signOutError instanceof Error ? signOutError.message : 'Sign out failed.')
+    }
+  }
 
   return (
     <div className="relative min-h-screen overflow-clip bg-[#050816] text-white">
@@ -19,7 +31,27 @@ const AppShell = () => {
         <div className="mx-auto flex max-w-[1520px] items-center gap-3 px-5 py-3 sm:px-6 lg:px-8">
           <img className="h-10 w-10 object-contain" src={logo} alt="CodeCircle logo" />
           <span className="text-lg font-semibold tracking-tight text-white">CodeCircle</span>
+          <div className="ml-auto flex min-w-0 items-center gap-3">
+            {user?.avatarUrl && (
+              <img className="h-8 w-8 rounded-full object-cover" src={user.avatarUrl} alt="" />
+            )}
+            <span className="hidden max-w-40 truncate text-sm text-slate-200 sm:inline">{user?.name}</span>
+            <button
+              type="button"
+              onClick={handleSignOut}
+              className="flex shrink-0 items-center gap-2 rounded-xl border border-white/10 px-3 py-2 text-sm text-slate-300 transition-colors hover:bg-white/5 hover:text-white"
+              aria-label="Sign out"
+            >
+              <LogOut className="h-4 w-4" />
+              <span className="hidden sm:inline">Sign out</span>
+            </button>
+          </div>
         </div>
+        {error && (
+          <p role="alert" className="mx-auto max-w-[1520px] px-5 pb-3 text-right text-sm text-rose-300 sm:px-6 lg:px-8">
+            {error}
+          </p>
+        )}
       </header>
 
       <div className="relative mx-auto flex max-w-[1520px] flex-col gap-5 px-4 py-5 sm:px-6 lg:flex-row lg:gap-6 lg:px-8 lg:py-6">

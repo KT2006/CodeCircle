@@ -121,16 +121,40 @@ export async function fetchProfile(rawHandle) {
   const submissions = await fetchUserSubmissions(handle)
   const solvedProblemIds = new Set()
   const activityByDate = {}
+  const activityDetailsByDate = {}
   for (const submission of submissions) {
     const timestamp = Number(submission.epoch_second)
     const date = new Date(timestamp * 1000)
     if (!Number.isFinite(timestamp) || !Number.isFinite(date.getTime())) continue
     const dateKey = date.toISOString().slice(0, 10)
     activityByDate[dateKey] = (activityByDate[dateKey] ?? 0) + 1
+    if (!activityDetailsByDate[dateKey]) {
+      activityDetailsByDate[dateKey] = {
+        submissions: 0,
+        attemptedProblems: new Set(),
+        solvedProblems: new Set(),
+      }
+    }
+    const daily = activityDetailsByDate[dateKey]
+    daily.submissions += 1
+    if (typeof submission.problem_id === 'string') {
+      daily.attemptedProblems.add(submission.problem_id)
+    }
     if (submission.result === 'AC' && typeof submission.problem_id === 'string') {
       solvedProblemIds.add(submission.problem_id)
+      daily.solvedProblems.add(submission.problem_id)
     }
   }
+  const normalizedActivityDetails = Object.fromEntries(
+    Object.entries(activityDetailsByDate).map(([day, details]) => [
+      day,
+      {
+        submissions: details.submissions,
+        attempted: details.attemptedProblems.size,
+        solved: details.solvedProblems.size,
+      },
+    ]),
+  )
 
   return {
     platform: 'atcoder',
@@ -143,6 +167,7 @@ export async function fetchProfile(rawHandle) {
     contestHistory,
     topics: [],
     activityByDate,
+    activityDetailsByDate: normalizedActivityDetails,
     activityAvailable: true,
     currentStreak: null,
   }

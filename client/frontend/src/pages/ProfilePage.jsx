@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   Calendar,
   ChevronDown,
@@ -435,6 +435,42 @@ const ProfilePage = () => {
     atcoder: null,
   })
   const [fetchErrors, setFetchErrors] = useState({})
+
+  useEffect(() => {
+    let cancelled = false
+    const loadSavedProfiles = async () => {
+      try {
+        const response = await fetch('/api/profile', { credentials: 'include' })
+        const result = await response.json()
+        if (!response.ok) {
+          throw new Error(result.error?.message ?? `Unable to load saved profile (HTTP ${response.status}).`)
+        }
+        if (cancelled) return
+
+        const savedProfiles = result.profiles ?? {}
+        setProfiles((current) => ({ ...current, ...savedProfiles }))
+        setPlatformHandles((current) => Object.fromEntries(
+          PLATFORM_CONFIG.map(({ id }) => [id, savedProfiles[id]?.username ?? current[id]]),
+        ))
+        if (Object.keys(savedProfiles).length > 0) {
+          const latestSync = Object.values(savedProfiles)
+            .map((profile) => new Date(profile.lastSyncedAt))
+            .filter((date) => Number.isFinite(date.getTime()))
+            .sort((left, right) => right - left)[0]
+          if (latestSync) setLastSyncedAt(latestSync)
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setFetchErrors({ profile: error instanceof Error ? error.message : 'Unable to load saved profile.' })
+        }
+      }
+    }
+
+    loadSavedProfiles()
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   const handles = Object.fromEntries(
     PLATFORM_CONFIG.map(({ id }) => [id, platformHandles[id].trim()]),

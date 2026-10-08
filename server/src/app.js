@@ -15,6 +15,7 @@
 
 import express from 'express'
 import cors from 'cors'
+import cookieParser from 'cookie-parser'
 
 import env from './config/env.js'
 import logger from './lib/logger.js'
@@ -51,6 +52,7 @@ if (env.NODE_ENV !== 'production') {
 
 // 3. Parse JSON bodies; limit 100 kb (plan §9) to prevent payload-flooding attacks
 app.use(express.json({ limit: '100kb' }))
+app.use(cookieParser())
 
 // ── Health check endpoints ────────────────────────────────────────────────────
 // GET /healthz — is the process alive? (load balancer uses this)

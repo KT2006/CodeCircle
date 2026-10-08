@@ -1,8 +1,11 @@
 import { Router } from 'express'
 import { z } from 'zod'
 import { fetchPlatformProfiles } from '../services/platformProfiles.js'
+import requireAuth from '../middleware/requireAuth.js'
+import { saveFetchedProfile } from '../repositories/profileData.js'
 
 const router = Router()
+router.use(requireAuth)
 
 const requestSchema = z.object({
   handles: z.object({
@@ -38,6 +41,11 @@ router.post('/fetch', async (req, res) => {
       .filter(([, handle]) => handle),
   )
   const result = await fetchPlatformProfiles(handles)
+  await Promise.all(
+    Object.values(result.profiles).map((profile) =>
+      saveFetchedProfile(req.user.id, profile),
+    ),
+  )
   const allFailed = Object.keys(result.profiles).length === 0
 
   res.status(allFailed ? 502 : 200).json(result)

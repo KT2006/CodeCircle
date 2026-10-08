@@ -35,10 +35,17 @@ const normalizeCodeforcesProfile = (normalized) => {
   const activityByDate = Object.fromEntries(
     normalized.daily.map(({ day, submissions }) => [day, submissions]),
   )
+  const activityDetailsByDate = Object.fromEntries(
+    normalized.daily.map(({ day, submissions, attempted, solved }) => [
+      day,
+      { submissions, attempted, solved },
+    ]),
+  )
 
   return {
     platform: 'codeforces',
     username: normalized.profile.handle,
+    solvedProblems: normalized.solvedProblems,
     rating: normalized.profile.rating,
     maxRating: normalized.profile.maxRating,
     rankTitle: normalized.profile.rankTitle,
@@ -59,6 +66,7 @@ const normalizeCodeforcesProfile = (normalized) => {
       }))
       .sort((left, right) => right.problemsSolved - left.problemsSolved),
     activityByDate,
+    activityDetailsByDate,
     activityAvailable: true,
     currentStreak: getCurrentStreak(activityByDate),
   }
