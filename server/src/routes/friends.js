@@ -26,10 +26,11 @@ const MAX_FRIENDS = 50
 const addFriendSchema = z.object({
   displayName: z.string().trim().min(1).max(60),
   handles: z.object({
-    leetcode:   z.string().trim().max(50).optional(),
-    codeforces: z.string().trim().max(40).optional(),
-    codechef:   z.string().trim().max(50).optional(),
-    atcoder:    z.string().trim().max(16).optional(),
+    leetcode:      z.string().trim().max(50).optional(),
+    codeforces:    z.string().trim().max(40).optional(),
+    codechef:      z.string().trim().max(50).optional(),
+    atcoder:       z.string().trim().max(16).optional(),
+    geeksforgeeks: z.string().trim().max(50).optional(),
   }).refine(
     (h) => Object.values(h).some(v => v && v.trim()),
     { message: 'At least one platform handle is required.' },
@@ -353,8 +354,8 @@ router.get('/:id', async (req, res) => {
     .map(([name, count], i) => ({ name, count, color: TOPIC_COLORS[i] }))
 
   // Platform solved cards
-  const PLATFORM_ORDER = ['leetcode', 'codeforces', 'codechef', 'atcoder']
-  const PLATFORM_LABELS = { leetcode: 'LeetCode', codeforces: 'Codeforces', codechef: 'CodeChef', atcoder: 'AtCoder' }
+  const PLATFORM_ORDER = ['leetcode', 'codeforces', 'codechef', 'atcoder', 'geeksforgeeks']
+  const PLATFORM_LABELS = { leetcode: 'LeetCode', codeforces: 'Codeforces', codechef: 'CodeChef', atcoder: 'AtCoder', geeksforgeeks: 'GeeksForGeeks' }
   const platformSolved = PLATFORM_ORDER.map(id => ({
     key: id,
     label: PLATFORM_LABELS[id],
@@ -442,7 +443,7 @@ function avatarColor(id = '') {
   return AVATAR_COLORS[sum % AVATAR_COLORS.length]
 }
 
-const PLATFORM_LABEL_MAP = { leetcode: 'LeetCode', codeforces: 'Codeforces', codechef: 'CodeChef', atcoder: 'AtCoder' }
+const PLATFORM_LABEL_MAP = { leetcode: 'LeetCode', codeforces: 'Codeforces', codechef: 'CodeChef', atcoder: 'AtCoder', geeksforgeeks: 'GeeksForGeeks' }
 function platformLabel(p) { return PLATFORM_LABEL_MAP[p] ?? p }
 
 export default router

@@ -48,6 +48,7 @@ function errorHandler(err, req, res, _next) {
         status >= 500 && process.env.NODE_ENV === 'production'
           ? 'An unexpected error occurred'
           : err.message,
+      requestId: req.id ?? null,
     },
   })
 }

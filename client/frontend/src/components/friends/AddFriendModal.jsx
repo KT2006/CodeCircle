@@ -1,15 +1,17 @@
 import { useState } from 'react'
 import { Loader2, Plus, Trash2, X } from 'lucide-react'
-import leetcode   from '../../assets/leetcode.png'
-import codeforces from '../../assets/codeforces.png'
-import codechef   from '../../assets/codechef.png'
-import atcoder    from '../../assets/atcoder.png'
+import leetcode        from '../../assets/leetcode.png'
+import codeforces      from '../../assets/codeforces.png'
+import codechef        from '../../assets/codechef.png'
+import atcoder         from '../../assets/atcoder.png'
+import geeksforgeeks   from '../../assets/geeksforgeeks.svg'
 
 const PLATFORMS = [
-  { key: 'codeforces', label: 'Codeforces', icon: codeforces, placeholder: 'e.g. tourist'  },
-  { key: 'leetcode',   label: 'LeetCode',   icon: leetcode,   placeholder: 'e.g. neal_wu'  },
-  { key: 'codechef',   label: 'CodeChef',   icon: codechef,   placeholder: 'e.g. gennady'  },
-  { key: 'atcoder',    label: 'AtCoder',    icon: atcoder,    placeholder: 'e.g. uwi_tkt'  },
+  { key: 'codeforces',    label: 'Codeforces',    icon: codeforces,    placeholder: 'e.g. tourist'  },
+  { key: 'leetcode',      label: 'LeetCode',      icon: leetcode,      placeholder: 'e.g. neal_wu'  },
+  { key: 'codechef',      label: 'CodeChef',      icon: codechef,      placeholder: 'e.g. gennady'  },
+  { key: 'atcoder',       label: 'AtCoder',        icon: atcoder,       placeholder: 'e.g. uwi_tkt'  },
+  { key: 'geeksforgeeks', label: 'GeeksForGeeks',  icon: geeksforgeeks, placeholder: 'e.g. rahul_gfg' },
 ]
 
 const EMPTY_HANDLES = () => Object.fromEntries(PLATFORMS.map(p => [p.key, '']))

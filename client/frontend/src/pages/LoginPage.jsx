@@ -48,7 +48,7 @@ const LoginPage = () => {
   const [isGoogleReady, setIsGoogleReady] = useState(false)
   const googleButtonRef = useRef(null)
   const navigate = useNavigate()
-  const { googleClientId, error, isLoading, setError, signInWithGoogle } = useAuth()
+  const { googleClientId, error, isLoading, isWakingUp, setError, signInWithGoogle } = useAuth()
 
   useEffect(() => {
     if (!googleClientId || isLoading) return undefined
@@ -134,16 +134,20 @@ const LoginPage = () => {
         </div>
 
         <div className="bottom mt-3 flex w-full max-w-sm flex-col items-center justify-center gap-4 text-white">
-            {googleClientId
-              ? (
+            {isLoading || isWakingUp ? (
+              <p className="text-center text-sm text-slate-400">
+                {isWakingUp ? '⏳ Server is starting up, please wait…' : 'Loading sign-in…'}
+              </p>
+            ) : googleClientId ? (
                 <div className="flex min-h-10 w-full justify-center">
                   {!isGoogleReady && <span className="sr-only">Loading Google sign-in…</span>}
                   <div ref={googleButtonRef} />
                 </div>
               )
               : <p className="text-center text-sm text-amber-200">
-                {isLoading ? 'Loading sign-in…' : 'Google sign-in is not configured.'}
-              </p>}
+                  Google sign-in is not configured.
+                </p>
+            }
             {error && <p role="alert" className="text-center text-sm text-rose-300">{error}</p>}
             <p className='text-center text-sm' > By continuing, you agree to our terms of service and privacy policy </p>
         </div>

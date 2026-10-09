@@ -2,6 +2,7 @@ import { sync as syncCodeforces, validateHandle as validateCodeforcesHandle } fr
 import { fetchProfile as fetchLeetCodeProfile } from '../adapters/leetcode.js'
 import { fetchProfile as fetchCodeChefProfile } from '../adapters/codechef.js'
 import { fetchProfile as fetchAtCoderProfile } from '../adapters/atcoder.js'
+import { fetchProfile as fetchGeeksForGeeksProfile } from '../adapters/geeksforgeeks.js'
 
 const getCurrentStreak = (activityByDate) => {
   const today = new Date()
@@ -79,10 +80,11 @@ export async function fetchCodeforcesProfile(rawHandle) {
 }
 
 const PLATFORM_FETCHERS = {
-  leetcode: fetchLeetCodeProfile,
-  codeforces: fetchCodeforcesProfile,
-  codechef: fetchCodeChefProfile,
-  atcoder: fetchAtCoderProfile,
+  leetcode:      fetchLeetCodeProfile,
+  codeforces:    fetchCodeforcesProfile,
+  codechef:      fetchCodeChefProfile,
+  atcoder:       fetchAtCoderProfile,
+  geeksforgeeks: fetchGeeksForGeeksProfile,
 }
 
 /**

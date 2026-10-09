@@ -1,11 +1,12 @@
 import { ChevronRight, Flame, Loader2, UserMinus } from 'lucide-react'
 import { LineChart, Line, ResponsiveContainer } from 'recharts'
-import leetcode   from '../../assets/leetcode.png'
-import codeforces from '../../assets/codeforces.png'
-import codechef   from '../../assets/codechef.png'
-import atcoder    from '../../assets/atcoder.png'
+import leetcode        from '../../assets/leetcode.png'
+import codeforces      from '../../assets/codeforces.png'
+import codechef        from '../../assets/codechef.png'
+import atcoder         from '../../assets/atcoder.png'
+import geeksforgeeks   from '../../assets/geeksforgeeks.svg'
 
-const PLATFORM_ICON = { leetcode, codeforces, codechef, atcoder }
+const PLATFORM_ICON = { leetcode, codeforces, codechef, atcoder, geeksforgeeks }
 
 // ── Status dot ────────────────────────────────────────────────────────────────
 

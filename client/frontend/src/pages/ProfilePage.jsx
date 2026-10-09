@@ -10,14 +10,15 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer,
 } from 'recharts'
-import leetcode   from '../assets/leetcode.png'
-import codeforces from '../assets/codeforces.png'
-import codechef   from '../assets/codechef.png'
-import atcoder    from '../assets/atcoder.png'
+import leetcode        from '../assets/leetcode.png'
+import codeforces      from '../assets/codeforces.png'
+import codechef        from '../assets/codechef.png'
+import atcoder         from '../assets/atcoder.png'
+import geeksforgeeks   from '../assets/geeksforgeeks.svg'
 
 // ─── Constants ──────────────────────────────────────────────────────────────────
 
-const PLATFORM_ICON = { leetcode, codeforces, codechef, atcoder }
+const PLATFORM_ICON = { leetcode, codeforces, codechef, atcoder, geeksforgeeks }
 
 const PLATFORM_CONFIG = [
   {
@@ -43,6 +44,12 @@ const PLATFORM_CONFIG = [
     label: 'AtCoder',
     color: '#3B82F6',
     profileUrl: (handle) => `https://atcoder.jp/users/${handle}`,
+  },
+  {
+    id: 'geeksforgeeks',
+    label: 'GeeksForGeeks',
+    color: '#2DBD6E',
+    profileUrl: (handle) => `https://www.geeksforgeeks.org/user/${handle}/`,
   },
 ]
 
@@ -689,7 +696,7 @@ const ProfilePage = () => {
 
   // ── Data state ──
   const [profiles, setProfiles] = useState({
-    leetcode: null, codeforces: null, codechef: null, atcoder: null,
+    leetcode: null, codeforces: null, codechef: null, atcoder: null, geeksforgeeks: null,
   })
   const [lastSyncedAt,  setLastSyncedAt]  = useState(null)
   const [isRefreshing,  setIsRefreshing]  = useState(false)

@@ -10,15 +10,16 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer,
 } from 'recharts'
-import leetcode   from '../assets/leetcode.png'
-import codeforces from '../assets/codeforces.png'
-import codechef   from '../assets/codechef.png'
-import atcoder    from '../assets/atcoder.png'
+import leetcode        from '../assets/leetcode.png'
+import codeforces      from '../assets/codeforces.png'
+import codechef        from '../assets/codechef.png'
+import atcoder         from '../assets/atcoder.png'
+import geeksforgeeks   from '../assets/geeksforgeeks.svg'
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
-const PLATFORM_ICON = { leetcode, codeforces, codechef, atcoder }
-const RATING_TABS   = ['Codeforces', 'LeetCode', 'CodeChef', 'AtCoder']
+const PLATFORM_ICON  = { leetcode, codeforces, codechef, atcoder, geeksforgeeks }
+const RATING_TABS    = ['Codeforces', 'LeetCode', 'CodeChef', 'AtCoder']
 const HEATMAP_RANGES = ['Last 3 months', 'Last 6 months', 'This year']
 const TOPIC_MODES   = ['Problems', 'Accuracy']
 const OVERVIEW_TABS = ['Overview', 'Activity', 'Contests', 'Topics']

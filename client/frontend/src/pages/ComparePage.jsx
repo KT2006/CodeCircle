@@ -13,14 +13,15 @@ import {
   XAxis, YAxis, Tooltip,
   ResponsiveContainer,
 } from 'recharts'
-import leetcode   from '../assets/leetcode.png'
-import codeforces from '../assets/codeforces.png'
-import codechef   from '../assets/codechef.png'
-import atcoder    from '../assets/atcoder.png'
+import leetcode        from '../assets/leetcode.png'
+import codeforces      from '../assets/codeforces.png'
+import codechef        from '../assets/codechef.png'
+import atcoder         from '../assets/atcoder.png'
+import geeksforgeeks   from '../assets/geeksforgeeks.svg'
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
-const PLATFORM_ICON = { leetcode, codeforces, codechef, atcoder }
+const PLATFORM_ICON = { leetcode, codeforces, codechef, atcoder, geeksforgeeks }
 const CF_MAX        = 3200
 
 // ── Shared primitives ──────────────────────────────────────────────────────────

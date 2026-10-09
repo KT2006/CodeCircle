@@ -54,13 +54,24 @@ const ssl =
 const pool = new Pool({
   connectionString: env.DATABASE_URL,
   ssl,
-  // Maximum connections in the pool. Free Neon tier allows ~100 concurrent
-  // connections, but keep this low on the free tier to avoid exhausting it.
+  // Keep pool small on free tiers to avoid exhausting Neon's connection limit
   max: env.NODE_ENV === 'production' ? 10 : 5,
-  // How long (ms) to wait for a connection from the pool before throwing
-  connectionTimeoutMillis: 10_000,
-  // How long (ms) a client can sit idle before being closed and removed
-  idleTimeoutMillis: 30_000,
+
+  // How long (ms) to wait for a connection from the pool before throwing.
+  // Raised slightly to give Neon time to wake from cold start.
+  connectionTimeoutMillis: 15_000,
+
+  // How long an idle client sits in the pool before being closed.
+  // Neon serverless kills idle connections after ~5 minutes.
+  // Set this well below that (60s) so the pool retires connections
+  // proactively before Neon silently kills them — prevents stale
+  // connection errors on the first request after a quiet period.
+  idleTimeoutMillis: 60_000,
+
+  // Send TCP keepalive packets on idle connections so the network
+  // layer doesn't silently drop them between requests.
+  keepAlive: true,
+  keepAliveInitialDelayMillis: 10_000,
 })
 
 // ── Log connection events ─────────────────────────────────────────────────────

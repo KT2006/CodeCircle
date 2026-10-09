@@ -9,13 +9,14 @@ router.use(requireAuth)
 
 const requestSchema = z.object({
   handles: z.object({
-    leetcode: z.string().trim().max(50).optional(),
-    codeforces: z.string().trim().max(40).optional(),
-    codechef: z.string().trim().max(50).optional(),
-    atcoder: z.string().trim().max(16).optional(),
+    leetcode:      z.string().trim().max(50).optional(),
+    codeforces:    z.string().trim().max(40).optional(),
+    codechef:      z.string().trim().max(50).optional(),
+    atcoder:       z.string().trim().max(16).optional(),
+    geeksforgeeks: z.string().trim().max(50).optional(),
   }).strict(),
 }).strict().superRefine(({ handles }, context) => {
-  if (!handles.leetcode && !handles.codeforces && !handles.codechef && !handles.atcoder) {
+  if (!handles.leetcode && !handles.codeforces && !handles.codechef && !handles.atcoder && !handles.geeksforgeeks) {
     context.addIssue({
       code: z.ZodIssueCode.custom,
       path: ['handles'],

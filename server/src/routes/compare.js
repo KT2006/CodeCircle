@@ -21,9 +21,9 @@ router.use(requireAuth)
 
 // ── constants ─────────────────────────────────────────────────────────────────
 
-const PLATFORM_ORDER = ['leetcode', 'codeforces', 'codechef', 'atcoder']
-const PLATFORM_LABEL = { leetcode: 'LeetCode', codeforces: 'Codeforces', codechef: 'CodeChef', atcoder: 'AtCoder' }
-const PLATFORM_COLOR = { leetcode: '#7C3AED', codeforces: '#22C55E', codechef: '#FB923C', atcoder: '#3B82F6' }
+const PLATFORM_ORDER = ['leetcode', 'codeforces', 'codechef', 'atcoder', 'geeksforgeeks']
+const PLATFORM_LABEL = { leetcode: 'LeetCode', codeforces: 'Codeforces', codechef: 'CodeChef', atcoder: 'AtCoder', geeksforgeeks: 'GeeksForGeeks' }
+const PLATFORM_COLOR = { leetcode: '#7C3AED', codeforces: '#22C55E', codechef: '#FB923C', atcoder: '#3B82F6', geeksforgeeks: '#2DBD6E' }
 const TOPIC_COLORS   = ['#8B5CF6', '#22C55E', '#FB923C', '#3B82F6', '#FF5B7F', '#F59E0B']
 
 const CF_TIERS = [
