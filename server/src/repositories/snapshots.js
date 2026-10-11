@@ -238,3 +238,44 @@ export async function upsertSolvedProblems(platformAccountId, problems, client =
     params,
   )
 }
+
+/**
+ * Get all tag stats for a snapshot from snapshot_tag_stats.
+ * Returns an array of { tag, solved_count, weighted_points } sorted by solved_count desc.
+ *
+ * @param {bigint|string} snapshotId
+ * @returns {Promise<Array<{ tag: string, solved_count: number, weighted_points: number }>>}
+ */
+export async function getTagsForSnapshot(snapshotId) {
+  if (!snapshotId) return []
+  const { rows } = await pool.query(
+    `SELECT tag, solved_count, weighted_points
+     FROM snapshot_tag_stats
+     WHERE snapshot_id = $1
+     ORDER BY solved_count DESC`,
+    [snapshotId],
+  )
+  return rows
+}
+
+/**
+ * Get rating history for a platform account by snapshot's platform_account_id.
+ * Returns rows ordered by rated_at asc, limited to the last N entries.
+ *
+ * @param {string} platformAccountId
+ * @param {number} limit
+ * @returns {Promise<Array<{ new_rating: number, rated_at: Date }>>}
+ */
+export async function getRatingSparkline(platformAccountId, limit = 15) {
+  if (!platformAccountId) return []
+  const { rows } = await pool.query(
+    `SELECT new_rating, rated_at
+     FROM rating_history
+     WHERE platform_account_id = $1
+     ORDER BY rated_at DESC
+     LIMIT $2`,
+    [platformAccountId, limit],
+  )
+  // Return in ascending order (oldest first) for charting
+  return rows.reverse()
+}

@@ -576,6 +576,57 @@ const EditHandlesModal = ({ profiles, onClose, onSave, isSaving, saveError }) =>
 
 // ─── Right sidebar ───────────────────────────────────────────────────────────────
 
+const ConnectedHandlesCard = ({ profiles, onEditHandles }) => (
+  <Card className="p-4">
+    <div className="mb-3 flex items-center justify-between">
+      <h2 className="text-sm font-semibold text-white">Connected Handles</h2>
+      <button
+        type="button"
+        onClick={onEditHandles}
+        className="flex items-center gap-1 text-xs font-medium text-violet-400 transition-colors hover:text-violet-300"
+      >
+        <Edit2 className="h-3 w-3" />
+        Edit
+      </button>
+    </div>
+    <div className="space-y-1">
+      {PLATFORM_CONFIG.map(cfg => {
+        const p = profiles[cfg.id]
+        return (
+          <div
+            key={cfg.id}
+            className="flex items-center gap-3 rounded-xl px-2 py-2 transition-colors hover:bg-white/4"
+          >
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/6">
+              <img src={PLATFORM_ICON[cfg.id]} alt={cfg.label} className="h-5 w-5 object-contain" />
+            </div>
+            <div className="min-w-0 flex-1">
+              {p ? (
+                <p className="text-sm font-medium text-white">{p.username}</p>
+              ) : (
+                <p className="text-sm italic text-slate-600">Not connected</p>
+              )}
+              <p className="text-[11px] text-slate-500">{cfg.label}</p>
+            </div>
+            {p && (
+              <a
+                href={cfg.profileUrl(p.username)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex shrink-0 items-center gap-1 text-xs font-medium text-violet-400 transition-colors hover:text-violet-300"
+                aria-label={`View ${p.username} on ${cfg.label}`}
+              >
+                View
+                <ExternalLink className="h-3 w-3" />
+              </a>
+            )}
+          </div>
+        )
+      })}
+    </div>
+  </Card>
+)
+
 const Sidebar = ({
   profiles, hasData,
   totalSolved, totalContests, currentStreak, totalActiveDays,
@@ -584,55 +635,9 @@ const Sidebar = ({
 }) => (
   <div className="space-y-4">
 
-    {/* Connected Handles */}
-    <Card className="p-4">
-      <div className="mb-3 flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-white">Connected Handles</h2>
-        <button
-          type="button"
-          onClick={onEditHandles}
-          className="flex items-center gap-1 text-xs font-medium text-violet-400 transition-colors hover:text-violet-300"
-        >
-          <Edit2 className="h-3 w-3" />
-          Edit
-        </button>
-      </div>
-      <div className="space-y-1">
-        {PLATFORM_CONFIG.map(cfg => {
-          const p = profiles[cfg.id]
-          return (
-            <div
-              key={cfg.id}
-              className="flex items-center gap-3 rounded-xl px-2 py-2 transition-colors hover:bg-white/4"
-            >
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/6">
-                <img src={PLATFORM_ICON[cfg.id]} alt={cfg.label} className="h-5 w-5 object-contain" />
-              </div>
-              <div className="min-w-0 flex-1">
-                {p ? (
-                  <p className="text-sm font-medium text-white">{p.username}</p>
-                ) : (
-                  <p className="text-sm italic text-slate-600">Not connected</p>
-                )}
-                <p className="text-[11px] text-slate-500">{cfg.label}</p>
-              </div>
-              {p && (
-                <a
-                  href={cfg.profileUrl(p.username)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex shrink-0 items-center gap-1 text-xs font-medium text-violet-400 transition-colors hover:text-violet-300"
-                  aria-label={`View ${p.username} on ${cfg.label}`}
-                >
-                  View
-                  <ExternalLink className="h-3 w-3" />
-                </a>
-              )}
-            </div>
-          )
-        })}
-      </div>
-    </Card>
+    <div className="hidden xl:block">
+      <ConnectedHandlesCard profiles={profiles} onEditHandles={onEditHandles} />
+    </div>
 
     {/* Quick Stats */}
     <Card className="p-4">
@@ -960,6 +965,13 @@ const ProfilePage = () => {
               <p role="alert" className="mt-3 rounded-xl bg-rose-500/10 px-4 py-2 text-sm text-rose-300">{fetchError}</p>
             )}
           </Card>
+
+          <div className="xl:hidden">
+            <ConnectedHandlesCard
+              profiles={profiles}
+              onEditHandles={() => { setSaveError(null); setShowEditModal(true) }}
+            />
+          </div>
 
           {/* 4 headline stats */}
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">

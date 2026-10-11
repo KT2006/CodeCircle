@@ -3,6 +3,10 @@
     {
       "source": "/api/:path*",
       "destination": "https://codecircle-z2ap.onrender.com/api/:path*"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
     }
   ]
 }

@@ -115,7 +115,7 @@ function buildFriendSummary(row) {
   return {
     id:            row.id,
     displayName:   row.display_name,
-    handle:        handles.map(h => `@${h.handle}`).join(', '),
+    handle:        handles.length ? handles.map(h => `@${h.handle}`).join(', ') : 'No linked platform handles',
     initials:      row.display_name.charAt(0).toUpperCase(),
     avatarColor:   avatarColor(row.id),
     status,
@@ -137,16 +137,16 @@ router.get('/', async (req, res) => {
   const { rows } = await pool.query(
     `SELECT
        f.id, f.display_name, f.created_at,
-       json_agg(json_build_object(
+       COALESCE(json_agg(json_build_object(
          'platform',         pa.platform,
          'handle',           pa.display_handle,
          'status',           pa.status,
          'lastSyncedAt',     pa.last_synced_at,
          'snapshot',         to_json(s)
-       ) ORDER BY pa.platform) AS handles
+       ) ORDER BY pa.platform) FILTER (WHERE pa.id IS NOT NULL), '[]'::json) AS handles
      FROM friends f
-     JOIN friend_handles fh ON fh.friend_id = f.id
-     JOIN platform_accounts pa ON pa.id = fh.platform_account_id
+     LEFT JOIN friend_handles fh ON fh.friend_id = f.id
+     LEFT JOIN platform_accounts pa ON pa.id = fh.platform_account_id
      LEFT JOIN account_snapshots s ON s.id = pa.latest_snapshot_id
      WHERE f.owner_user_id = $1
      GROUP BY f.id
@@ -173,6 +173,12 @@ router.post('/', async (req, res) => {
 
   const { displayName, handles } = parsed.data
 
+  if (await friendsRepo.existsByDisplayName(req.user.id, displayName)) {
+    return res.status(409).json({
+      error: { code: 'DUPLICATE', message: `You already have a friend named "${displayName}".` },
+    })
+  }
+
   // Enforce friend limit
   const count = await friendsRepo.countByOwner(req.user.id)
   if (count >= MAX_FRIENDS) {
@@ -187,6 +193,15 @@ router.post('/', async (req, res) => {
   )
   const result = await fetchPlatformProfiles(toFetch)
   const fetchedProfiles = result.profiles ?? {}
+  if (Object.keys(fetchedProfiles).length === 0) {
+    return res.status(422).json({
+      error: {
+        code: 'NO_PROFILES_FETCHED',
+        message: 'We could not fetch any platform profiles. Check the handles and try again.',
+      },
+      errors: result.errors ?? {},
+    })
+  }
 
   // Store shared public profile data without linking friend handles to user_accounts.
   await Promise.all(
@@ -195,10 +210,19 @@ router.post('/', async (req, res) => {
     )
   )
 
-  // Create friend row (409 on duplicate display_name)
+  const linkedHandles = []
+  for (const [platform, handle] of Object.entries(toFetch)) {
+    const canonical = handle.trim().toLowerCase()
+    const account = await platformAccountsRepo.findByHandle(platform, canonical)
+    if (account) {
+      linkedHandles.push({ platform, platformAccountId: account.id })
+    }
+  }
+
+  // Create the friend and all handle links atomically.
   let friend
   try {
-    friend = await friendsRepo.create(req.user.id, displayName)
+    friend = await friendsRepo.create(req.user.id, displayName, linkedHandles)
   } catch (err) {
     if (err.code === '23505') {
       return res.status(409).json({
@@ -206,15 +230,6 @@ router.post('/', async (req, res) => {
       })
     }
     throw err
-  }
-
-  // Link platform accounts to friend
-  for (const [platform, handle] of Object.entries(toFetch)) {
-    const canonical = handle.trim().toLowerCase()
-    const account = await platformAccountsRepo.findByHandle(platform, canonical)
-    if (account) {
-      await friendsRepo.upsertHandle(friend.id, platform, account.id)
-    }
   }
 
   // Re-fetch the friend with handles for response
@@ -254,16 +269,16 @@ router.get('/:id', async (req, res) => {
   const { rows } = await pool.query(
     `SELECT
        f.id, f.display_name, f.created_at,
-       json_agg(json_build_object(
+       COALESCE(json_agg(json_build_object(
          'platform',         pa.platform,
          'handle',           pa.display_handle,
          'status',           pa.status,
          'lastSyncedAt',     pa.last_synced_at,
          'snapshot',         to_json(s)
-       ) ORDER BY pa.platform) AS handles
+       ) ORDER BY pa.platform) FILTER (WHERE pa.id IS NOT NULL), '[]'::json) AS handles
      FROM friends f
-     JOIN friend_handles fh ON fh.friend_id = f.id
-     JOIN platform_accounts pa ON pa.id = fh.platform_account_id
+     LEFT JOIN friend_handles fh ON fh.friend_id = f.id
+     LEFT JOIN platform_accounts pa ON pa.id = fh.platform_account_id
      LEFT JOIN account_snapshots s ON s.id = pa.latest_snapshot_id
      WHERE f.id = $1 AND f.owner_user_id = $2
      GROUP BY f.id`,

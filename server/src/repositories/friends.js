@@ -27,16 +27,16 @@ export async function listByOwner(userId) {
   const { rows } = await pool.query(
     `SELECT
        f.id, f.display_name, f.created_at,
-       json_agg(json_build_object(
+       COALESCE(json_agg(json_build_object(
          'platform',          pa.platform,
          'handle',            pa.display_handle,
          'status',            pa.status,
          'lastSyncedAt',      pa.last_synced_at,
          'latestSnapshotId',  pa.latest_snapshot_id
-       ) ORDER BY pa.platform) AS handles
+       ) ORDER BY pa.platform) FILTER (WHERE pa.id IS NOT NULL), '[]'::json) AS handles
      FROM friends f
-     JOIN friend_handles fh ON fh.friend_id = f.id
-     JOIN platform_accounts pa ON pa.id = fh.platform_account_id
+     LEFT JOIN friend_handles fh ON fh.friend_id = f.id
+     LEFT JOIN platform_accounts pa ON pa.id = fh.platform_account_id
      WHERE f.owner_user_id = $1
      GROUP BY f.id
      ORDER BY f.created_at DESC`,
@@ -55,7 +55,7 @@ export async function listByOwner(userId) {
  */
 export async function findByIdAndOwner(friendId, ownerUserId) {
   const { rows } = await pool.query(
-    `SELECT f.*, json_agg(json_build_object(
+    `SELECT f.*, COALESCE(json_agg(json_build_object(
        'platform',             pa.platform,
        'handle',               pa.display_handle,
        'platformAccountId',    pa.id,
@@ -64,10 +64,10 @@ export async function findByIdAndOwner(friendId, ownerUserId) {
        'nextRefreshAllowedAt', pa.next_refresh_allowed_at,
        'latestSnapshotId',     pa.latest_snapshot_id,
        'lastError',            pa.last_error
-     ) ORDER BY pa.platform) AS handles
+     ) ORDER BY pa.platform) FILTER (WHERE pa.id IS NOT NULL), '[]'::json) AS handles
      FROM friends f
-     JOIN friend_handles fh ON fh.friend_id = f.id
-     JOIN platform_accounts pa ON pa.id = fh.platform_account_id
+     LEFT JOIN friend_handles fh ON fh.friend_id = f.id
+     LEFT JOIN platform_accounts pa ON pa.id = fh.platform_account_id
      WHERE f.id = $1 AND f.owner_user_id = $2
      GROUP BY f.id`,
     [friendId, ownerUserId],
@@ -91,20 +91,56 @@ export async function countByOwner(userId) {
 }
 
 /**
+ * Check whether the owner already has a friend with this display name.
+ *
+ * @param {string} ownerUserId
+ * @param {string} displayName
+ * @returns {Promise<boolean>}
+ */
+export async function existsByDisplayName(ownerUserId, displayName) {
+  const { rowCount } = await pool.query(
+    'SELECT 1 FROM friends WHERE owner_user_id = $1 AND display_name = $2 LIMIT 1',
+    [ownerUserId, displayName],
+  )
+  return rowCount > 0
+}
+
+/**
  * Insert a new friend row.
  *
  * @param {string} ownerUserId
  * @param {string} displayName
+ * @param {{ platform: string, platformAccountId: string }[]} handles
  * @returns {Promise<object>}  the new friend row
  */
-export async function create(ownerUserId, displayName) {
-  const { rows } = await pool.query(
-    `INSERT INTO friends (owner_user_id, display_name)
-     VALUES ($1, $2)
-     RETURNING *`,
-    [ownerUserId, displayName],
-  )
-  return rows[0]
+export async function create(ownerUserId, displayName, handles = []) {
+  const client = await pool.connect()
+  try {
+    await client.query('BEGIN')
+    const { rows } = await client.query(
+      `INSERT INTO friends (owner_user_id, display_name)
+       VALUES ($1, $2)
+       RETURNING *`,
+      [ownerUserId, displayName],
+    )
+    const friend = rows[0]
+
+    for (const { platform, platformAccountId } of handles) {
+      await client.query(
+        `INSERT INTO friend_handles (friend_id, platform, platform_account_id)
+         VALUES ($1, $2, $3)`,
+        [friend.id, platform, platformAccountId],
+      )
+    }
+
+    await client.query('COMMIT')
+    return friend
+  } catch (error) {
+    await client.query('ROLLBACK')
+    throw error
+  } finally {
+    client.release()
+  }
 }
 
 /**
@@ -126,7 +162,8 @@ export async function rename(friendId, ownerUserId, displayName) {
 }
 
 /**
- * Delete a friend and all their handle links (CASCADE handles the latter).
+ * Delete a friend and their handle links. Remove platform account data only
+ * when no friend or user still references that shared account.
  * Only deletes if the caller owns the friend.
  *
  * @param {string} friendId
@@ -134,11 +171,49 @@ export async function rename(friendId, ownerUserId, displayName) {
  * @returns {Promise<boolean>}  true if deleted, false if not found / not owner
  */
 export async function remove(friendId, ownerUserId) {
-  const { rowCount } = await pool.query(
-    'DELETE FROM friends WHERE id = $1 AND owner_user_id = $2',
-    [friendId, ownerUserId],
-  )
-  return rowCount > 0
+  const client = await pool.connect()
+  try {
+    await client.query('BEGIN')
+
+    const { rows: friendRows } = await client.query(
+      'SELECT id FROM friends WHERE id = $1 AND owner_user_id = $2 FOR UPDATE',
+      [friendId, ownerUserId],
+    )
+    if (friendRows.length === 0) {
+      await client.query('ROLLBACK')
+      return false
+    }
+
+    const { rows: accountRows } = await client.query(
+      'SELECT platform_account_id FROM friend_handles WHERE friend_id = $1',
+      [friendId],
+    )
+    await client.query('DELETE FROM friends WHERE id = $1', [friendId])
+
+    if (accountRows.length > 0) {
+      await client.query(
+        `DELETE FROM platform_accounts pa
+         WHERE pa.id = ANY($1::uuid[])
+           AND NOT EXISTS (
+             SELECT 1 FROM friend_handles fh
+             WHERE fh.platform_account_id = pa.id
+           )
+           AND NOT EXISTS (
+             SELECT 1 FROM user_accounts ua
+             WHERE ua.platform_account_id = pa.id
+           )`,
+        [accountRows.map(({ platform_account_id }) => platform_account_id)],
+      )
+    }
+
+    await client.query('COMMIT')
+    return true
+  } catch (error) {
+    await client.query('ROLLBACK')
+    throw error
+  } finally {
+    client.release()
+  }
 }
 
 /**

@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { ChevronRight, Flame, Loader2, UserMinus } from 'lucide-react'
 import { LineChart, Line, ResponsiveContainer } from 'recharts'
 import leetcode        from '../../assets/leetcode.png'
@@ -81,9 +82,11 @@ const LastActivity = ({ platform, text, timeAgo }) => {
 // ── FriendCard ─────────────────────────────────────────────────────────────────
 
 /**
- * @param {{ friend: object, removing: boolean, onClick: () => void, onRemove: (e) => void }} props
+ * @param {{ friend: object, removing: boolean, onClick: () => void, onRemove: (e: Event) => void }} props
  */
 const FriendCard = ({ friend, removing = false, onClick, onRemove }) => {
+  const [confirming, setConfirming] = useState(false)
+
   const {
     displayName,
     handle,
@@ -99,27 +102,29 @@ const FriendCard = ({ friend, removing = false, onClick, onRemove }) => {
 
   const platformEntries = Object.entries(platforms ?? {})
 
+  // ── Confirmation handlers ──────────────────────────────────────────────────
+
+  const handleRemoveClick = (e) => {
+    e.stopPropagation()
+    setConfirming(true)
+  }
+
+  const handleConfirmRemove = (e) => {
+    e.stopPropagation()
+    setConfirming(false)
+    onRemove?.(e)
+  }
+
+  const handleCancelRemove = (e) => {
+    e.stopPropagation()
+    setConfirming(false)
+  }
+
   return (
     <article
       className="group relative flex cursor-pointer flex-col gap-3 rounded-2xl border border-white/8 bg-[linear-gradient(180deg,rgba(14,21,39,0.98),rgba(9,14,28,0.98))] p-4 shadow-[0_8px_24px_rgba(0,0,0,0.24)] transition-all duration-200 hover:border-violet-500/30 hover:shadow-[0_8px_32px_rgba(124,58,237,0.14)]"
-      onClick={onClick}
+      onClick={confirming ? undefined : onClick}
     >
-      {/* Remove button — shown on hover */}
-      {onRemove && (
-        <button
-          type="button"
-          onClick={onRemove}
-          disabled={removing}
-          title="Remove friend"
-          className="absolute right-3 top-3 flex h-7 w-7 items-center justify-center rounded-lg text-slate-600 opacity-0 transition-all hover:bg-rose-500/15 hover:text-rose-400 group-hover:opacity-100 disabled:cursor-wait"
-        >
-          {removing
-            ? <Loader2 className="h-3.5 w-3.5 animate-spin text-slate-500" />
-            : <UserMinus className="h-3.5 w-3.5" />
-          }
-        </button>
-      )}
-
       {/* ── Header row ── */}
       <div className="flex items-start gap-3">
         <Avatar initials={initials} color={avatarColor} />
@@ -133,17 +138,67 @@ const FriendCard = ({ friend, removing = false, onClick, onRemove }) => {
           </div>
         </div>
 
-        {/* Streak pill + chevron */}
-        <div className="flex shrink-0 items-center gap-2">
+        {/* Right side: streak pill + remove button + chevron — all in a row, no overlap */}
+        <div className="flex shrink-0 items-center gap-1.5">
           {streak > 0 && (
             <div className="flex items-center gap-1 rounded-full bg-orange-500/15 px-2.5 py-1 text-xs font-semibold text-orange-300">
               <Flame className="h-3.5 w-3.5" />
               {streak}d
             </div>
           )}
+
+          {/* Remove button — only shown on hover, sits left of chevron */}
+          {onRemove && !confirming && (
+            <button
+              type="button"
+              onClick={handleRemoveClick}
+              disabled={removing}
+              title="Remove friend"
+              className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-600 opacity-0 transition-all hover:bg-rose-500/15 hover:text-rose-400 group-hover:opacity-100 disabled:cursor-wait"
+            >
+              {removing
+                ? <Loader2 className="h-3.5 w-3.5 animate-spin text-slate-500" />
+                : <UserMinus className="h-3.5 w-3.5" />
+              }
+            </button>
+          )}
+
           <ChevronRight className="h-4 w-4 shrink-0 text-slate-600 transition-colors group-hover:text-slate-400" />
         </div>
       </div>
+
+      {/* ── Inline confirmation bar ── */}
+      {confirming && (
+        <div
+          className="flex items-center justify-between gap-3 rounded-xl border border-rose-500/20 bg-rose-500/8 px-3 py-2.5"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <p className="text-xs text-slate-300">
+            Remove <span className="font-semibold text-white">{displayName}</span> from your friends?
+          </p>
+          <div className="flex shrink-0 items-center gap-2">
+            <button
+              type="button"
+              onClick={handleCancelRemove}
+              className="rounded-lg border border-white/10 px-3 py-1 text-xs font-medium text-slate-300 transition-colors hover:border-white/20 hover:text-white"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleConfirmRemove}
+              disabled={removing}
+              className="flex items-center gap-1.5 rounded-lg bg-rose-600 px-3 py-1 text-xs font-semibold text-white transition-colors hover:bg-rose-500 disabled:cursor-wait disabled:opacity-60"
+            >
+              {removing
+                ? <Loader2 className="h-3 w-3 animate-spin" />
+                : null
+              }
+              Remove
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* ── Platform stats row ── */}
       {platformEntries.length > 0 && (

@@ -2,11 +2,11 @@
 
 > **Audience:** a coding agent implementing this repo, supervised by the owner (Kshitij).
 > **Owner's rule:** the owner makes and must be able to defend every architecture decision. Do not silently change anything under **Section 2A (Decided)**. If something blocks you, write it down in `docs/decisions.md` and pick the safest option from Section 2B. Do not invent a new design.
-> **Current implementation status:** Google sign-in and a responsive, data-backed profile are working. The Friends and Compare pages are still unimplemented. See the Context section below for the current architecture and verified status.
+> **Current implementation status:** Google sign-in, persisted platform profile data, and initial Friends/Compare flows are implemented and deployed. The Profile page is responsive, with recent mobile header improvements. See the Context section below for current scope, deployment details, and known gaps.
 
 ## Context
 
-This section is the project handoff: it records the product intent, current implementation, verified integrations, known limitations, and the owner's latest priorities. Keep it current as implementation changes. The detailed architecture and requirements remain in the sections below.
+This section is the project handoff: it records the product intent, current implementation, verified integrations, known limitations, deployment setup, and the owner's latest priorities. Updated 2026-10-09. Keep it current as implementation changes. The detailed architecture and requirements remain in the sections below.
 
 ### Product and decisions
 
@@ -20,14 +20,28 @@ This section is the project handoff: it records the product intent, current impl
 ### Current implementation
 
 - Google sign-in, session restoration, protected frontend routes, sign-out, and user identity display are implemented. The user's Google identity details are stored in Neon `users`.
+- Google sign-in uses Google Identity Services' rendered standard button, not the One Tap prompt. The frontend obtains the client ID at runtime from `GET /api/auth/config`; do not add a `VITE_GOOGLE_CLIENT_ID` unless the implementation changes. This is an ID-token flow: the frontend posts the credential to `POST /api/auth/google`; there is no redirect/callback URL.
+- A missing session is expected to make `GET /api/auth/me` return 401; it must not block the public Google sign-in endpoint. The backend issues the `cc_session` JWT cookie only after Google token verification and successful user upsert.
 - The Profile page accepts platform handles, fetches platform profiles, displays the available profile data, and can restore the latest saved profile via the authenticated `GET /api/profile` endpoint.
 - Authenticated `POST /api/platform-profiles/fetch` fetches supplied handles and persists platform links and snapshots in Neon. Persistence includes snapshot summaries, rating history, topic counts where available, daily activity where available, and Codeforces solved-problem rows.
+- Friends and Compare have frontend pages and backend routes with initial add/list/remove and compare flows. The features are still in progress; do not treat all displayed friend/compare data or behavior as fully production-complete.
+- The Profile header was made more mobile-responsive in commit `d01606b`: platform handle labels were removed from under the account name, action buttons moved into a responsive row, and connection/fetch status was separated. The Google standard sign-in button change was pushed in `c9035b4`.
 - The current latest-snapshot read path also stores the normalized adapter result in `account_snapshots.raw_meta`. Review the payload size and align this with the plan's normalized-data-only storage default before scaling.
 - Migrations `001` through `010` are applied to the hosted Neon database. Migration `010` expands the supported platform constraint to include CodeChef and AtCoder.
 - On 2026-10-08, the signed-in user's four platform links and latest snapshots were verified in Neon. The authenticated profile endpoint returned all four profiles. Codeforces had 140 persisted distinct solved-problem rows at that verification; this count reflects that fetch and may change on a later sync.
 - A previously observed Codeforces discrepancy remains unresolved: the profile page for `kshitij_21` showed 156 solved, while API submissions yielded 150 accepted submissions across 140 distinct problem keys. The adapter counts distinct accepted problem keys.
 - These fetches currently happen synchronously on demand and save their results. The planned shared 15-minute cooldown, background queue/worker, retry pipeline, and stale-while-revalidate behavior are **not implemented** and are intentionally deferred until the core product works.
-- Profile is the active screen. Friends and Compare currently have empty frontend pages and placeholder API routes; the friends schema and partial repository exist. Feed remains out of v1.
+- Profile is the most complete screen; Friends and Compare are the next product areas to finish. Feed remains out of v1.
+
+### Deployment and production status
+
+- Production frontend: `https://code-circle-six.vercel.app`; API/backend: `https://codecircle-z2ap.onrender.com`; database: Neon Postgres.
+- `client/frontend/vercel.json` rewrites `/api/:path*` to the Render service's `/api/:path*`. Frontend requests use relative `/api/...` URLs and credentials, so browser requests stay same-origin through Vercel and production CORS is not needed.
+- The Render service must use root directory `server`, build command `npm install`, and start command `npm start` (`node src/server.js`). Required Render environment variables: `NODE_ENV=production`, `DATABASE_URL` (Neon connection string), `JWT_SECRET` (random secret at least 32 characters), and `GOOGLE_CLIENT_ID` (same Google Web client ID used by the frontend config). Render supplies `PORT`; Redis is optional for current flows.
+- Google Cloud OAuth client: add `http://localhost:5173` and the deployed Vercel origin under Authorized JavaScript origins. This flow does not use an Authorized redirect URI. Do not add the Render API origin as a JavaScript origin.
+- The Render `/healthz`, `/readyz`, and auth config endpoint, plus the Vercel API rewrite, were observed returning success on 2026-10-08. `/readyz` reported the database reachable. Earlier Google sign-in 500s coincided with an unreachable database; if 500s recur, capture the failing endpoint, response body, `x-request-id`, and matching Render log before changing auth/session code.
+- A browser console `401` for `/api/auth/me` before login is expected. Browser-side `ERR_BLOCKED_BY_CLIENT` for Google telemetry and COOP warnings are not by themselves evidence of an API/session failure. If a particular browser blocks Google Identity Services, check Shields/extensions and verify the actual `POST /api/auth/google` status and Render logs.
+- Latest pushed commit at this handoff: `d01606b` (`Improve mobile profile header layout`), authored by the owner. Recent frontend production builds and focused lint, backend lint, and production health smoke checks passed. Repository-wide frontend lint still reports unused-import errors in untouched pre-existing components; the production build also warns about a large JS chunk.
 
 ### Platform data coverage and limitations
 
@@ -44,9 +58,26 @@ The profile heatmap combines daily submission activity for platforms that expose
 
 Build a working product before adding refresh optimizations. Prioritize the end-to-end user flows: persist and display the user's data, implement friend management and friend activity, and then implement profile comparison. Move the 15-minute refresh cooldown, shared refresh gate, queues/workers, retries, and related concurrency/staleness optimization to the **final hardening/optimization phase**. The cooldown remains a desired eventual behavior; it is deferred, not removed.
 
+### Feature backlog (owner-prioritised)
+
+| # | Feature | Priority | Verdict |
+|---|---------|----------|---------|
+| 1 | Friends leaderboard | High | Core social feature |
+| 2 | GeeksForGeeks adapter | High | Expands platform coverage — **implemented 2026-10-09** |
+| 3 | Refresh rate limits | High | Protects external platforms |
+| 4 | Redis caching | High | Improves latency and reduces API calls |
+| 5 | Concurrent request capacity | High | Measure and document, don't guess |
+| 6 | Rate limiting and overload protection | High | Essential for a public API |
+| 7 | Task queues for fetching | High | Valuable if refreshes are slow or frequent |
+| 8 | Shareable public profile card | Very High | Great product and portfolio feature |
+| 9 | Website visitor count | Medium | Useful analytics, not a core feature |
+| 10 | Frontend rate limiting | Medium | UX improvement, but backend enforcement is mandatory |
+| 11 | New color palette and UI | Low | Polish after functionality |
+| 12 | Public demo experience | Very High | Lets recruiters explore without friction |
+
 ### Validation and working conventions
 
-- Recent validation passed: server ESLint, focused frontend ESLint, frontend production build, authenticated profile endpoint smoke test, and direct checks of the hosted Neon rows.
+- Recent validation passed: server ESLint, focused frontend ESLint, frontend production build, production `/healthz` smoke test, and direct checks of hosted endpoints/Neon rows.
 - Be careful with this repository's dirty worktree: inspect the exact files to stage. Never stage `.env` or secrets. Do not push until the owner explicitly says to push the day's work.
 - Preserve the existing UI appearance unless the owner asks for a visual redesign. Frontend values are displayed as integers.
 - The owner wants to review and understand architecture decisions. Ask rather than silently changing open decisions in Section 2C.

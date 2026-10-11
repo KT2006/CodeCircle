@@ -155,9 +155,13 @@ const FriendsPage = () => {
         method: 'DELETE',
         credentials: 'include',
       })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error?.message ?? `HTTP ${res.status}`)
       if (res.ok) {
         setFriends(prev => prev.filter(f => f.id !== friendId))
       }
+    } catch (err) {
+      setLoadError(err.message)
     } finally {
       setRemoving(null)
     }

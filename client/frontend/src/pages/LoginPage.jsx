@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth/useAuth'
+import { getReturnTo } from '../auth/returnTo'
 import logo from '../assets/logo.png'
 import fullcircle from '../assets/full_circle.png'
 
@@ -47,6 +48,7 @@ import fullcircle from '../assets/full_circle.png'
 const LoginPage = () => {
   const [isGoogleReady, setIsGoogleReady] = useState(false)
   const googleButtonRef = useRef(null)
+  const location = useLocation()
   const navigate = useNavigate()
   const { googleClientId, error, isLoading, isWakingUp, setError, signInWithGoogle } = useAuth()
 
@@ -66,7 +68,7 @@ const LoginPage = () => {
           }
           try {
             await signInWithGoogle(credential)
-            navigate('/profile', { replace: true })
+            navigate(getReturnTo(location), { replace: true })
           } catch (signInError) {
             setError(signInError instanceof Error ? signInError.message : 'Google sign-in failed.')
           }
@@ -106,7 +108,7 @@ const LoginPage = () => {
       cancelled = true
       script?.removeEventListener('load', initializeGoogleSignIn)
     }
-  }, [googleClientId, isLoading, navigate, setError, signInWithGoogle])
+  }, [googleClientId, isLoading, location, navigate, setError, signInWithGoogle])
 
   return (
     <>
