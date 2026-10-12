@@ -1,4 +1,5 @@
 import pool from '../db/pool.js'
+import { scoreProfile, normalizeTag } from '../scoring/index.js'
 
 const toInteger = (value) => {
   if (value === null || value === undefined || value === '') return null
@@ -31,12 +32,15 @@ async function saveProfile(profile, linkedUserId = null) {
       )
     }
 
+    const scored = scoreProfile(profile.platform, profile)
+
     const { rows: snapshotRows } = await client.query(
       `INSERT INTO account_snapshots (
          platform_account_id, rating, max_rating, rank_title, contests_count,
-         problems_solved, solved_by_bucket, score_version, raw_meta
+         problems_solved, solved_by_bucket, skill_score, contest_score,
+         score_version, raw_meta
        )
-       VALUES ($1, $2, $3, $4, $5, $6, $7, 1, $8)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
        RETURNING id`,
       [
         accountId,
@@ -48,6 +52,9 @@ async function saveProfile(profile, linkedUserId = null) {
         profile.solvedByBucket || profile.solvedByDifficulty
           ? JSON.stringify(profile.solvedByBucket ?? profile.solvedByDifficulty)
           : null,
+        scored.skillScore,
+        scored.contestScore,
+        scored.scoreVersion,
         JSON.stringify(profile),
       ],
     )
@@ -61,7 +68,9 @@ async function saveProfile(profile, linkedUserId = null) {
       topics.forEach((topic, index) => {
         const offset = index * 4
         values.push(`($${offset + 1}, $${offset + 2}, $${offset + 3}, $${offset + 4})`)
-        params.push(snapshotId, topic.slug, Math.round(Number(topic.problemsSolved)), Number(topic.problemsSolved))
+        const norm = normalizeTag(topic.slug)
+        const weightedPoints = scored.topicMastery[norm]?.points ?? Number(topic.problemsSolved)
+        params.push(snapshotId, topic.slug, Math.round(Number(topic.problemsSolved)), weightedPoints)
       })
       await client.query(
         `INSERT INTO snapshot_tag_stats (snapshot_id, tag, solved_count, weighted_points)
@@ -220,7 +229,8 @@ export async function saveFriendProfile(profile) {
 
 export async function getSavedProfiles(userId) {
   const { rows } = await pool.query(
-    `SELECT pa.platform, pa.display_handle, pa.last_synced_at, s.raw_meta
+    `SELECT pa.platform, pa.display_handle, pa.last_synced_at, s.raw_meta,
+            s.skill_score, s.contest_score, s.score_version
      FROM user_accounts ua
      JOIN platform_accounts pa ON pa.id = ua.platform_account_id
      JOIN account_snapshots s ON s.id = pa.latest_snapshot_id
@@ -236,6 +246,9 @@ export async function getSavedProfiles(userId) {
       username: row.display_handle,
       platform: row.platform,
       lastSyncedAt: row.last_synced_at,
+      skillScore: row.skill_score ? Number(row.skill_score) : null,
+      contestScore: row.contest_score ? Number(row.contest_score) : null,
+      scoreVersion: row.score_version,
     },
   ]))
 }

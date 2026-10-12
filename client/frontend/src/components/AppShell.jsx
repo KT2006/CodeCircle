@@ -1,115 +1,132 @@
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom'
-import { LogOut, Scale, Sparkles, UserRound, Users } from 'lucide-react'
 import { useAuth } from '../auth/useAuth'
-import logo from '../assets/logo.png'
+import { useEffect, useState } from 'react'
+import { LogOut } from 'lucide-react'
 
 const NAV_ITEMS = [
-  { label: 'Profile', href: '/profile', icon: UserRound },
-  { label: 'Compare', href: '/compare', icon: Scale },
-  { label: 'Friends', href: '/friends', icon: Users },
+  { label: 'Profile',  href: '/profile'  },
+  { label: 'Compare',  href: '/compare'  },
+  { label: 'Friends',  href: '/friends'  },
 ]
 
 const AppShell = () => {
-  const { pathname } = useLocation()
-  const navigate = useNavigate()
+  const { pathname }             = useLocation()
+  const navigate                 = useNavigate()
   const { error, setError, user, signOut } = useAuth()
+
+  const [theme, setTheme] = useState(() => {
+    try { return localStorage.getItem('cc-theme') || 'auto' } catch { return 'auto' }
+  })
+
+  useEffect(() => {
+    const root = document.documentElement
+    if (theme === 'light') root.dataset.theme = 'light'
+    else if (theme === 'dark') root.dataset.theme = 'dark'
+    else delete root.dataset.theme
+    try { localStorage.setItem('cc-theme', theme) } catch { /* noop */ }
+  }, [theme])
+
+  const toggleTheme = () => {
+    const isDark = document.documentElement.dataset.theme !== 'light' &&
+      !document.documentElement.dataset.theme
+        ? !window.matchMedia('(prefers-color-scheme: light)').matches
+        : document.documentElement.dataset.theme === 'dark'
+    setTheme(isDark ? 'light' : 'dark')
+  }
 
   const handleSignOut = async () => {
     try {
       await signOut()
       navigate('/', { replace: true })
-    } catch (signOutError) {
-      setError(signOutError instanceof Error ? signOutError.message : 'Sign out failed.')
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Sign out failed.')
     }
   }
 
   return (
-    <div className="relative min-h-screen overflow-clip bg-[#050816] text-white">
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(56,189,248,0.08),transparent_28%),radial-gradient(circle_at_top_right,rgba(124,58,237,0.14),transparent_30%)]" />
+    <div style={{ background: 'var(--bg)', color: 'var(--text)', minHeight: '100dvh' }}>
+      {/* ── Top nav — matches reference .top-nav exactly ── */}
+      <nav aria-label="Main" className="top-nav">
+        {/* Logo */}
+        <Link to="/profile" className="logo" style={{ textDecoration: 'none', color: 'inherit' }}>
+          <b>C</b>
+          <span>CodeCircle</span>
+        </Link>
 
-      <header className="relative z-10 border-b border-white/6 bg-[#070b16]/90">
-        <div className="mx-auto flex max-w-[1520px] items-center gap-3 px-5 py-3 sm:px-6 lg:px-8">
-          <img className="h-10 w-10 object-contain" src={logo} alt="CodeCircle logo" />
-          <span className="text-lg font-semibold tracking-tight text-white">CodeCircle</span>
-          <div className="ml-auto flex min-w-0 items-center gap-3">
-            {user?.avatarUrl && (
-              <img className="h-8 w-8 rounded-full object-cover" src={user.avatarUrl} alt="" />
-            )}
-            <span className="hidden max-w-40 truncate text-sm text-slate-200 sm:inline">{user?.name}</span>
-            <button
-              type="button"
-              onClick={handleSignOut}
-              className="flex shrink-0 items-center gap-2 rounded-xl border border-white/10 px-3 py-2 text-sm text-slate-300 transition-colors hover:bg-white/5 hover:text-white"
-              aria-label="Sign out"
-            >
-              <LogOut className="h-4 w-4" />
-              <span className="hidden sm:inline">Sign out</span>
-            </button>
-          </div>
+        {/* Nav pill buttons */}
+        <div className="top-nav-links">
+          {NAV_ITEMS.map(({ label, href }) => {
+            const active = pathname === href || pathname.startsWith(href + '/')
+            return (
+              <Link
+                key={href}
+                to={href}
+                aria-current={active ? 'page' : undefined}
+                style={{
+                  fontFamily: 'inherit',
+                  fontSize: 15,
+                  cursor: 'pointer',
+                  border: `1px solid ${active ? 'var(--text)' : 'var(--line)'}`,
+                  background: active ? 'var(--text)' : 'transparent',
+                  color: active ? 'var(--bg)' : 'var(--text)',
+                  borderRadius: 999,
+                  padding: '9px 18px',
+                  textDecoration: 'none',
+                  transition: 'background 0.15s, color 0.15s',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {label}
+              </Link>
+            )
+          })}
+
+          {/* Theme toggle */}
+          <button
+            type="button"
+            onClick={toggleTheme}
+            aria-label="Switch light or dark theme"
+            style={{
+              fontFamily: 'inherit',
+              fontSize: 15,
+              cursor: 'pointer',
+              border: '1px solid var(--line)',
+              background: 'transparent',
+              color: 'var(--text)',
+              borderRadius: 999,
+              padding: '9px 18px',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            Theme
+          </button>
         </div>
-        {error && (
-          <p role="alert" className="mx-auto max-w-[1520px] px-5 pb-3 text-right text-sm text-rose-300 sm:px-6 lg:px-8">
-            {error}
-          </p>
-        )}
-      </header>
 
-      <div className="relative mx-auto flex max-w-[1520px] flex-col gap-5 px-4 py-5 sm:px-6 lg:flex-row lg:gap-6 lg:px-8 lg:py-6">
-        <aside className="w-full shrink-0 space-y-5 lg:sticky lg:top-6 lg:w-[220px] lg:self-start">
-          <nav aria-label="Main navigation" className="rounded-[26px] border border-white/8 bg-[linear-gradient(180deg,rgba(14,21,39,0.98),rgba(9,14,28,0.98))] p-3 shadow-[0_20px_50px_rgba(0,0,0,0.32)] sm:p-4">
-            <div className="grid grid-cols-3 gap-2 lg:grid-cols-1">
-              {NAV_ITEMS.map(({ label, href, icon: Icon }) => {
-                const active = pathname === href
+        {/* Sign out button — green background with logout icon */}
+        <button
+          type="button"
+          onClick={handleSignOut}
+          title={user?.name ? `${user.name} (Sign out)` : 'Sign out'}
+          aria-label="Sign out"
+          className="signout-btn"
+        >
+          <LogOut size={16} strokeWidth={2.4} />
+        </button>
+      </nav>
 
-                return (
-                  <Link
-                    key={href}
-                    to={href}
-                    aria-current={active ? 'page' : undefined}
-                    className={`flex min-w-0 items-center justify-center gap-2 rounded-2xl border px-2 py-3 text-sm font-medium transition-colors sm:gap-3 sm:px-4 sm:py-4 sm:text-base lg:justify-start ${
-                      active
-                        ? 'border-violet-500/20 bg-violet-500/12 text-violet-200 shadow-[0_0_24px_rgba(124,58,237,0.14)]'
-                        : 'border-transparent text-slate-300 hover:border-white/8 hover:bg-white/5 hover:text-white'
-                    }`}
-                  >
-                    <Icon className="h-5 w-5 shrink-0" />
-                    <span className="truncate">{label}</span>
-                  </Link>
-                )
-              })}
-            </div>
-          </nav>
+      {error && (
+        <p role="alert" style={{
+          maxWidth: 1120, margin: '0 auto',
+          padding: '0 16px 8px', textAlign: 'right',
+          fontSize: 13, color: '#ff6b6b',
+        }}>
+          {error}
+        </p>
+      )}
 
-          <section className="hidden overflow-hidden rounded-[26px] border border-white/8 bg-[linear-gradient(180deg,rgba(14,21,39,0.98),rgba(9,14,28,0.98))] p-5 shadow-[0_20px_50px_rgba(0,0,0,0.32)] lg:block">
-            <div className="flex items-center gap-3">
-              <div className="rounded-xl bg-violet-500/12 p-2 text-violet-300">
-                <Sparkles className="h-5 w-5" />
-              </div>
-              <p className="font-semibold text-white">Pro Tip</p>
-            </div>
-            <div className="mt-5 space-y-3 text-sm leading-6 text-slate-300">
-              <p>Solve consistently.</p>
-              <p>Track smart.</p>
-              <p>Grow together.</p>
-            </div>
-            <div className="relative mt-6 flex h-28 items-end gap-2 rounded-3xl bg-[radial-gradient(circle_at_top,rgba(124,58,237,0.22),transparent_50%),linear-gradient(180deg,rgba(15,23,42,0.24),rgba(15,23,42,0.02))] px-5 pt-4">
-              <span className="absolute right-5 top-3 text-amber-300">★</span>
-              {[18, 34, 28, 46, 68].map((height) => (
-                <div key={height} className="relative flex-1 rounded-t-xl bg-violet-500/30">
-                  <div
-                    className="absolute inset-x-0 bottom-0 rounded-t-xl bg-[linear-gradient(180deg,#9F7AEA,#7C3AED)]"
-                    style={{ height }}
-                  />
-                </div>
-              ))}
-            </div>
-          </section>
-        </aside>
-
-        <main className="min-w-0 flex-1">
-          <Outlet />
-        </main>
-      </div>
+      <main style={{ maxWidth: 1120, margin: '0 auto', padding: '4px 16px 60px' }}>
+        <Outlet />
+      </main>
     </div>
   )
 }

@@ -17,7 +17,7 @@ const PLATFORMS = [
 const EMPTY_HANDLES = () => Object.fromEntries(PLATFORMS.map(p => [p.key, '']))
 
 /**
- * Modal for adding a new friend.
+ * Modal for adding a new friend with CodeCircle theme.
  *
  * Props:
  *   open     – boolean
@@ -45,11 +45,17 @@ const AddFriendModal = ({ open, onClose, onSubmit }) => {
     setLoading(false)
   }
 
-  const handleClose = () => { reset(); onClose?.() }
+  const handleClose = () => {
+    reset()
+    onClose?.()
+  }
 
   const handleSubmit = async (e) => {
     e.preventDefault()
-    if (!displayName.trim()) { setNameError('A display name is required.'); return }
+    if (!displayName.trim()) {
+      setNameError('A display name is required.')
+      return
+    }
     if (filledHandles.length === 0) return
 
     setLoading(true)
@@ -75,80 +81,93 @@ const AddFriendModal = ({ open, onClose, onSubmit }) => {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
-      onClick={(e) => { if (e.target === e.currentTarget) handleClose() }}
+      className="cc-modal-backdrop"
+      onClick={(e) => {
+        if (e.target === e.currentTarget && !loading) handleClose()
+      }}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="cc-add-friend-title"
     >
-      <div className="w-full max-w-md overflow-hidden rounded-2xl border border-white/10 bg-[linear-gradient(180deg,rgba(14,21,39,0.99),rgba(9,14,28,0.99))] shadow-[0_24px_64px_rgba(0,0,0,0.6)]">
-
+      <div className="cc-modal-box">
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-white/8 px-6 py-4">
+        <div className="cc-modal-header">
           <div>
-            <h2 className="text-base font-semibold text-white">Add a Friend</h2>
-            <p className="text-xs text-slate-400">
-              Enter a name and at least one platform handle. We'll fetch their profile instantly.
+            <h2 id="cc-add-friend-title">Add a Friend</h2>
+            <p>
+              Enter a name and at least one platform handle. We&apos;ll fetch their profile instantly.
             </p>
           </div>
           <button
             type="button"
             onClick={handleClose}
             disabled={loading}
-            className="rounded-xl p-1.5 text-slate-400 transition-colors hover:bg-white/8 hover:text-white disabled:opacity-50"
+            className="cc-modal-close"
             aria-label="Close"
           >
-            <X className="h-4 w-4" />
+            <X size={16} />
           </button>
         </div>
 
         {/* Form */}
-        <form onSubmit={handleSubmit} className="space-y-5 px-6 py-5">
-
+        <form onSubmit={handleSubmit} className="cc-modal-body">
           {/* Display name */}
-          <div className="space-y-1.5">
-            <label className="text-xs font-medium text-slate-300" htmlFor="friend-name">
-              Display Name <span className="text-rose-400">*</span>
+          <div>
+            <label className="cc-field-label" htmlFor="friend-name">
+              Display Name <span className="req">*</span>
             </label>
             <input
               id="friend-name"
               type="text"
               value={displayName}
-              onChange={(e) => { setDisplayName(e.target.value); setNameError('') }}
+              onChange={(e) => {
+                setDisplayName(e.target.value)
+                setNameError('')
+              }}
               placeholder="e.g. Rahul"
               maxLength={60}
               disabled={loading}
-              className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white placeholder-slate-500 outline-none transition-colors focus:border-violet-500/60 focus:ring-1 focus:ring-violet-500/30 disabled:opacity-50"
+              className="cc-input"
+              autoFocus
             />
-            {nameError && <p className="text-xs text-rose-400">{nameError}</p>}
+            {nameError && (
+              <p style={{ color: 'var(--hot)', fontSize: 12, margin: '5px 0 0' }}>
+                {nameError}
+              </p>
+            )}
           </div>
 
           {/* Platform handles */}
-          <div className="space-y-1.5">
-            <p className="text-xs font-medium text-slate-300">
-              Platform Handles <span className="text-slate-500">(at least one)</span>
-            </p>
-            <div className="space-y-2">
+          <div>
+            <span className="cc-field-label">
+              Platform Handles <span className="sub">(at least one)</span>
+            </span>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               {PLATFORMS.map(({ key, label, icon, placeholder }) => (
-                <div key={key} className="flex items-center gap-2.5">
-                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/6">
-                    <img src={icon} alt={label} className="h-4 w-4 object-contain opacity-80" />
+                <div key={key} className="cc-platform-row">
+                  <div className="cc-platform-badge" title={label}>
+                    <img src={icon} alt={label} />
                   </div>
                   <input
                     type="text"
                     value={handles[key]}
-                    onChange={(e) => setHandles(prev => ({ ...prev, [key]: e.target.value }))}
+                    onChange={(e) =>
+                      setHandles(prev => ({ ...prev, [key]: e.target.value }))
+                    }
                     placeholder={placeholder}
                     maxLength={50}
                     aria-label={`${label} handle`}
                     disabled={loading}
-                    className="flex-1 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white placeholder-slate-500 outline-none transition-colors focus:border-violet-500/60 focus:ring-1 focus:ring-violet-500/30 disabled:opacity-50"
+                    className="cc-input"
                   />
                   {handles[key] && !loading && (
                     <button
                       type="button"
                       onClick={() => setHandles(prev => ({ ...prev, [key]: '' }))}
-                      className="shrink-0 text-slate-500 transition-colors hover:text-rose-400"
+                      className="cc-platform-clear"
                       aria-label={`Clear ${label} handle`}
                     >
-                      <Trash2 className="h-3.5 w-3.5" />
+                      <Trash2 size={15} />
                     </button>
                   )}
                 </div>
@@ -158,35 +177,40 @@ const AddFriendModal = ({ open, onClose, onSubmit }) => {
 
           {/* Submit error */}
           {submitError && (
-            <p className="rounded-xl bg-rose-500/10 px-3 py-2 text-xs text-rose-300">{submitError}</p>
+            <p className="cc-modal-error">{submitError}</p>
           )}
 
           {/* Loading hint */}
           {loading && (
-            <p className="text-xs text-slate-400">
+            <p style={{ color: 'var(--mute)', fontSize: 13, margin: 0 }}>
               Fetching platform profiles… this may take a few seconds.
             </p>
           )}
 
-          {/* Footer */}
-          <div className="flex gap-3 pt-1">
+          {/* Footer buttons */}
+          <div className="cc-modal-footer">
             <button
               type="button"
               onClick={handleClose}
               disabled={loading}
-              className="flex-1 rounded-xl border border-white/10 py-2.5 text-sm text-slate-300 transition-colors hover:bg-white/5 hover:text-white disabled:opacity-50"
+              className="cc-btn-cancel"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={!canSubmit}
-              className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-violet-600 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-violet-500 disabled:cursor-not-allowed disabled:opacity-40"
+              className="cc-btn-primary"
             >
-              {loading
-                ? <><Loader2 className="h-4 w-4 animate-spin" /> Fetching…</>
-                : <><Plus className="h-4 w-4" /> Add Friend</>
-              }
+              {loading ? (
+                <>
+                  <Loader2 size={16} className="animate-spin" /> Fetching…
+                </>
+              ) : (
+                <>
+                  <Plus size={16} strokeWidth={2.5} /> Add Friend
+                </>
+              )}
             </button>
           </div>
         </form>

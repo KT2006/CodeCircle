@@ -74,6 +74,8 @@ Build a working product before adding refresh optimizations. Prioritize the end-
 | 10 | Frontend rate limiting | Medium | UX improvement, but backend enforcement is mandatory |
 | 11 | New color palette and UI | Low | Polish after functionality |
 | 12 | Public demo experience | Very High | Lets recruiters explore without friction |
+| 13 | Custom unique username system | Very High | Allows users to choose, verify, and claim unique handles |
+| 14 | Publicly shareable profile page / portfolio (`/profile/:username`) | Very High | Public read-only portfolio for resume/socials without login wall |
 
 ### Validation and working conventions
 
@@ -601,6 +603,33 @@ Keep the existing look. Do not redesign.
 - Prompt returns 3 short paragraphs: where you lead, where the friend leads, what to practise next. Version the prompt (`PROMPT_VERSION`).
 - Cache key = `sha256(sorted snapshot ids + includeContests + PROMPT_VERSION)` in `comparison_verdicts`. Regenerate only when snapshots change.
 - Rate limit 10/hour/user. Model name from env. If the call fails, the Compare page still works without the card.
+
+---
+
+## 11B. Backlog feature specifications (Owner-requested)
+
+### 11B.1 Custom unique username system (Feature #13)
+- **Goal:** Allow registered users to choose, verify, and claim a unique CodeCircle handle.
+- **DB Migration (`012_add_username_to_users`):**
+  - Add `username text UNIQUE` to `users`.
+  - Constraint: `CHECK (username ~ '^[a-z0-9_-]{3,30}$')` (case-insensitive canonical lowercased).
+  - Add unique index `idx_users_username_lower ON users (lower(username))`.
+- **Endpoints:**
+  - `GET /api/users/check-username?username=<val>` (Public or authenticated): Validates regex, checks collisions, returns `{ available: boolean, reason?: string }`.
+  - `PATCH /api/me/username` `{ username }`: Authenticated user claims or changes username with strict validation and 409 conflict handling.
+- **Frontend UX:**
+  - Settings / onboarding prompt: "Choose your CodeCircle username".
+  - Live debounced availability indicator (checking / available / taken).
+
+### 11B.2 Publicly shareable profile page / portfolio (Feature #14 & #8)
+- **Goal:** Expose a public, unauthenticated profile view at `/profile/:username` (or `/u/:username`) for resumes, LinkedIn, and developer portfolios.
+- **Access control:** Bypasses login wall; read-only. Sensitive account details (email, google_sub) are excluded.
+- **Endpoint:**
+  - `GET /api/public/profile/:username`: Returns public snapshot data, multi-platform solved breakdown, radar chart topics, streak, activity heatmap, and contest history. Returns 404 if user not found or has not claimed a username.
+- **Frontend route:**
+  - Unauthenticated route `/profile/:username`: Renders a polished portfolio dashboard with a "Powered by CodeCircle / Join" header and a "Copy portfolio link" / "Share card" action.
+- **Shareable card & badge:**
+  - Embeddable badge/card (SVG / dynamic preview) for GitHub READMEs.
 
 ---
 

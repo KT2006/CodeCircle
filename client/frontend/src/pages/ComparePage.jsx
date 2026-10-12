@@ -1,618 +1,63 @@
-import { useEffect, useState } from 'react'
-import {
-  ArrowLeftRight, ChevronDown, ChevronRight,
-  Flame, Code2, Trophy, Calendar,
-  Lightbulb, Target, TrendingUp, BookOpen,
-  AlertCircle, CheckCircle, XCircle,
-  Loader2, Users, Crown, Clock,
-} from 'lucide-react'
-import {
-  LineChart, Line,
-  BarChart, Bar,
-  XAxis, YAxis, Tooltip,
-  ResponsiveContainer,
-} from 'recharts'
-import leetcode        from '../assets/leetcode.png'
-import codeforces      from '../assets/codeforces.png'
-import codechef        from '../assets/codechef.png'
-import atcoder         from '../assets/atcoder.png'
-import geeksforgeeks   from '../assets/geeksforgeeks.svg'
+import { useEffect, useMemo, useState } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useAuth } from '../auth/useAuth'
 
-// ── Constants ──────────────────────────────────────────────────────────────────
+const PLATFORMS = [
+  { key: 'leetcode',      label: 'LeetCode'      },
+  { key: 'codeforces',    label: 'Codeforces'    },
+  { key: 'codechef',      label: 'CodeChef'      },
+  { key: 'atcoder',       label: 'AtCoder'       },
+  { key: 'geeksforgeeks', label: 'GeeksForGeeks' },
+]
 
-const PLATFORM_ICON = { leetcode, codeforces, codechef, atcoder, geeksforgeeks }
-const CF_MAX        = 3200
+const CATEGORIES = [
+  { label: 'Composite Score', key: 'composite' },
+  { label: 'Rating',      key: 'rate'   },
+  { label: 'Problems',    key: 'prob'   },
+  { label: 'Contests',    key: 'cont'   },
+  { label: 'Streak',      key: 'streak' },
+  { label: 'Active days', key: 'days'   },
+]
 
-// ── Shared primitives ──────────────────────────────────────────────────────────
-
-const Card = ({ className = '', children }) => (
-  <div className={`rounded-2xl border border-white/8 bg-[linear-gradient(180deg,rgba(14,21,39,0.98),rgba(9,14,28,0.98))] shadow-[0_8px_24px_rgba(0,0,0,0.24)] ${className}`}>
-    {children}
-  </div>
-)
-
-const SectionLabel = ({ children }) => (
-  <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">{children}</p>
-)
-
-const fmt = (n) => new Intl.NumberFormat('en-US').format(Math.round(n ?? 0))
-
-function relativeTime(isoString, now) {
-  if (!isoString) return null
-  const ms  = now - new Date(isoString).getTime()
-  const min = Math.round(ms / 60000)
-  if (min < 1)   return 'just now'
-  if (min < 60)  return `${min}m ago`
-  const hr = Math.round(min / 60)
-  if (hr  < 24)  return `${hr}h ago`
-  const d  = Math.round(hr / 24)
-  return `${d}d ago`
-}
-
-// ── Friend selector dropdown ───────────────────────────────────────────────────
-
-const FriendSelector = ({ friends, selectedId, onChange, loading }) => {
-  const [open, setOpen] = useState(false)
-  const selected = friends.find(f => f.id === selectedId)
-
-  return (
-    <div className="relative">
-      <button
-        type="button"
-        disabled={loading}
-        onClick={() => setOpen(o => !o)}
-        className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-slate-200 transition-colors hover:bg-white/8 disabled:opacity-50"
-      >
-        <Users className="h-4 w-4 text-violet-400" />
-        {selected ? selected.displayName : 'Select a friend…'}
-        <ChevronDown className={`h-3.5 w-3.5 text-slate-400 transition-transform ${open ? 'rotate-180' : ''}`} />
-      </button>
-      {open && (
-        <div className="absolute right-0 top-full z-30 mt-1.5 max-h-60 w-56 overflow-y-auto rounded-xl border border-white/10 bg-[#0e1527] shadow-[0_16px_40px_rgba(0,0,0,0.5)]">
-          {friends.length === 0 ? (
-            <p className="px-4 py-3 text-xs text-slate-500">No friends added yet.</p>
-          ) : (
-            friends.map(f => (
-              <button
-                key={f.id}
-                type="button"
-                onClick={() => { onChange(f.id); setOpen(false) }}
-                className={`flex w-full items-center gap-3 px-4 py-2.5 text-sm transition-colors hover:bg-white/6 ${
-                  selectedId === f.id ? 'text-violet-300' : 'text-slate-200'
-                }`}
-              >
-                <div
-                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white"
-                  style={{ backgroundColor: '#2563EB' }}
-                >
-                  {f.displayName.charAt(0).toUpperCase()}
-                </div>
-                <span className="truncate">{f.displayName}</span>
-              </button>
-            ))
-          )}
-        </div>
-      )}
-    </div>
-  )
-}
-
-// ── Winner Banner ─────────────────────────────────────────────────────────────
-
-const WinnerBanner = ({ winner, you, friend, swapped }) => {
-  if (!winner) return null
-
-  const youName    = swapped ? friend.displayName : you.displayName
-  const friendName = swapped ? you.displayName    : friend.displayName
-
-  // Adjust winner label for swap state
-  const effectiveWinner =
-    winner.overall === 'tie' ? 'tie' :
-    winner.overall === 'you' && !swapped ? 'you' :
-    winner.overall === 'friend' && swapped ? 'you' :
-    'friend'
-
-  const winnerName = effectiveWinner === 'you' ? youName : effectiveWinner === 'friend' ? friendName : null
-
-  const youDisplayScore    = swapped ? winner.friendScore : winner.youScore
-  const friendDisplayScore = swapped ? winner.youScore    : winner.friendScore
-
-  if (effectiveWinner === 'tie') {
-    return (
-      <div className="flex items-center gap-3 rounded-2xl border border-amber-500/20 bg-amber-500/8 px-5 py-4">
-        <Trophy className="h-5 w-5 shrink-0 text-amber-400" />
-        <div className="flex-1">
-          <p className="text-sm font-semibold text-white">It's a tie! 🤝</p>
-          <p className="text-xs text-slate-400">
-            Both scored {youDisplayScore}/{winner.total} — evenly matched across all dimensions.
-          </p>
-        </div>
-      </div>
-    )
-  }
-
-  return (
-    <div className={`flex items-center gap-3 rounded-2xl border px-5 py-4 ${
-      effectiveWinner === 'you'
-        ? 'border-violet-500/25 bg-violet-500/8'
-        : 'border-blue-500/25 bg-blue-500/8'
-    }`}>
-      <Crown className={`h-5 w-5 shrink-0 ${effectiveWinner === 'you' ? 'text-violet-400' : 'text-blue-400'}`} />
-      <div className="flex-1">
-        <p className="text-sm font-semibold text-white">
-          {winnerName} is winning this comparison
-        </p>
-        <p className="text-xs text-slate-400">
-          {effectiveWinner === 'you'
-            ? `${youDisplayScore}/${winner.total} dimensions vs ${friendDisplayScore}/${winner.total} for ${friendName}`
-            : `${friendDisplayScore}/${winner.total} dimensions vs ${youDisplayScore}/${winner.total} for ${youName}`
-          }
-        </p>
-      </div>
-      {/* Mini breakdown pills */}
-      <div className="hidden items-center gap-1 sm:flex">
-        {winner.breakdown.map(d => (
-          <span
-            key={d.label}
-            title={d.label}
-            className={`h-2 w-2 rounded-full ${
-              (d.winner === 'you' && !swapped) || (d.winner === 'friend' && swapped)
-                ? 'bg-violet-400'
-                : d.winner === 'tie'
-                ? 'bg-slate-500'
-                : 'bg-blue-400'
-            }`}
-          />
-        ))}
-      </div>
-    </div>
-  )
-}
-
-// ── Staleness badge ───────────────────────────────────────────────────────────
-
-const StaleBadge = ({ lastSyncedAt }) => {
-  const [now, setNow] = useState(null)
-
-  useEffect(() => {
-    const timer = setTimeout(() => setNow(Date.now()), 0)
-    return () => clearTimeout(timer)
-  }, [lastSyncedAt])
-
-  if (!lastSyncedAt) return (
-    <span className="flex items-center gap-1 rounded-full bg-rose-500/15 px-2 py-0.5 text-[10px] font-medium text-rose-400">
-      <Clock className="h-3 w-3" /> Never synced
-    </span>
-  )
-  const ageMs = now === null ? null : now - new Date(lastSyncedAt).getTime()
-  const label = now === null ? 'Recently synced' : relativeTime(lastSyncedAt, now)
-  const stale = ageMs !== null && ageMs > 6 * 3600000
-  return (
-    <span className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium ${
-      stale
-        ? 'bg-amber-500/12 text-amber-400'
-        : 'bg-emerald-500/12 text-emerald-400'
-    }`}>
-      <Clock className="h-3 w-3" />
-      {label}
-    </span>
-  )
-}
-
-// ── User identity card ─────────────────────────────────────────────────────────
-
-const UserCard = ({ user, isYou, flipped = false, isWinner = false }) => {
-  const statItems = [
-    { icon: Flame,    label: 'streak',      value: user.streak ?? 0,   color: 'text-orange-400'  },
-    { icon: Code2,    label: 'problems',    value: fmt(user.problems),  color: 'text-blue-400'    },
-    { icon: Trophy,   label: 'contests',    value: user.contests ?? 0,  color: 'text-amber-400'   },
-    { icon: Calendar, label: 'active days', value: user.activeDays ?? 0,color: 'text-emerald-400' },
-  ]
-
-  return (
-    <Card className={`w-[320px] shrink-0 p-5 md:w-auto md:flex-1 ${isWinner ? 'ring-1 ring-violet-500/40' : ''}`}>
-      <div className={`flex items-start gap-4 ${flipped ? 'flex-row-reverse text-right' : ''}`}>
-        <div className="relative shrink-0">
-          <div
-            className="flex h-16 w-16 items-center justify-center rounded-full text-2xl font-bold text-white shadow-[0_0_28px_rgba(0,0,0,0.5)]"
-            style={{ backgroundColor: user.avatarColor }}
-          >
-            {user.initials}
-          </div>
-          {isWinner && (
-            <div className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.6)]">
-              <Crown className="h-3 w-3 text-amber-900" />
-            </div>
-          )}
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className={`flex items-center gap-2 ${flipped ? 'justify-end' : ''}`}>
-            <p className="break-all text-base font-bold text-white sm:text-xl">{user.handle ?? user.displayName}</p>
-            {isYou && (
-              <span className="rounded-full bg-violet-500/20 px-2.5 py-0.5 text-xs font-semibold text-violet-300">
-                You
-              </span>
-            )}
-          </div>
-          <p className="mt-0.5 truncate text-sm text-slate-400">{user.bio}</p>
-          <div className={`mt-1.5 flex items-center gap-2 ${flipped ? 'justify-end' : ''}`}>
-            <StaleBadge lastSyncedAt={user.lastSyncedAt} />
-          </div>
-        </div>
-      </div>
-      <div className="mt-4 grid grid-cols-4 gap-2 border-t border-white/6 pt-4">
-        {statItems.map(({ icon: Icon, label, value, color }) => (
-          <div key={label} className="flex flex-col items-center gap-1">
-            <Icon className={`h-4 w-4 ${color}`} />
-            <span className="text-lg font-bold text-white">{value}</span>
-            <span className="text-center text-[10px] leading-tight text-slate-500">{label}</span>
-          </div>
-        ))}
-      </div>
-    </Card>
-  )
-}
-
-const VSBadge = () => (
-  <div className="flex shrink-0 items-center justify-center">
-    <div className="flex h-10 w-10 items-center justify-center rounded-full border-2 border-violet-500/40 bg-[#0e1527] text-sm font-bold text-white shadow-[0_0_20px_rgba(124,58,237,0.3)] md:h-14 md:w-14 md:text-base">
-      VS
-    </div>
-  </div>
-)
-
-// ── Sparkline ─────────────────────────────────────────────────────────────────
-
-const Sparkline = ({ data, color = '#7C3AED' }) => {
-  if (!data || data.length < 2) return null
-  const chartData = data.map((v, i) => ({ i, v }))
-  return (
-    <div className="h-12 w-28">
-      <ResponsiveContainer width="100%" height="100%">
-        <LineChart data={chartData}>
-          <Line type="monotone" dataKey="v" stroke={color} strokeWidth={2} dot={false} isAnimationActive={false} />
-        </LineChart>
-      </ResponsiveContainer>
-    </div>
-  )
-}
-
-// ── CF Rating row ──────────────────────────────────────────────────────────────
-
-const RatingBar = ({ youRating, friendRating, cfTiers }) => {
-  const youPct    = Math.min(((youRating    ?? 0) / CF_MAX) * 100, 100)
-  const friendPct = Math.min(((friendRating ?? 0) / CF_MAX) * 100, 100)
-  const gap       = (friendRating ?? 0) - (youRating ?? 0)
-  const pillPct   = (youPct + friendPct) / 2
-
-  return (
-    <div className="w-full space-y-2 px-4 py-2">
-      <div className="relative flex items-center" style={{ height: 24 }}>
-        <div
-          className="absolute -translate-x-1/2 rounded-full border border-orange-500/30 bg-orange-500/15 px-3 py-0.5 text-xs font-semibold text-orange-300 whitespace-nowrap"
-          style={{ left: `${Math.min(Math.max(pillPct, 10), 90)}%` }}
-        >
-          {gap > 0 ? `🔥 ${gap} behind` : gap < 0 ? `🏆 ${Math.abs(gap)} ahead` : '🎯 Tied!'}
-        </div>
-      </div>
-      <div className="relative mt-1 h-3 overflow-visible rounded-full bg-white/8">
-        <div className="absolute left-0 top-0 h-full rounded-full bg-violet-500" style={{ width: `${youPct}%` }} />
-        <div className="absolute left-0 top-0 h-full rounded-l-full bg-blue-400 opacity-70" style={{ width: `${friendPct}%` }} />
-        <div
-          className="absolute top-1/2 h-5 w-5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-violet-400 bg-[#0e1527] shadow-[0_0_8px_rgba(124,58,237,0.6)]"
-          style={{ left: `${youPct}%` }} title={`You: ${youRating ?? '—'}`}
-        />
-        <div
-          className="absolute top-1/2 h-5 w-5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-blue-400 bg-[#0e1527] shadow-[0_0_8px_rgba(59,130,246,0.6)]"
-          style={{ left: `${friendPct}%` }} title={`Friend: ${friendRating ?? '—'}`}
-        />
-      </div>
-      {cfTiers && (
-        <div className="flex items-start justify-between text-[10px] text-slate-500">
-          {cfTiers.map(({ label, value }) => (
-            <span key={value} className="whitespace-pre-line text-center leading-tight">
-              {label.split('\n').map((line, i) => (
-                <span key={i} className={`block ${i === 0 ? 'text-slate-400' : 'text-slate-600'}`}>{line}</span>
-              ))}
-            </span>
-          ))}
-        </div>
-      )}
-    </div>
-  )
-}
-
-const CFRatingRow = ({ you, friend, cfTiers }) => (
-  <Card className="p-5">
-    <SectionLabel>Codeforces Rating</SectionLabel>
-    <div className="mt-3 flex items-center gap-3">
-      <div className="flex w-36 shrink-0 flex-col gap-1">
-        <p className="text-3xl font-bold text-white">{you.cfRating ?? '—'}</p>
-        {you.cfRankTitle && <p className="text-xs text-violet-400">{you.cfRankTitle}</p>}
-        <Sparkline data={you.ratingSparkline} color="#7C3AED" />
-      </div>
-      <div className="flex-1">
-        <RatingBar youRating={you.cfRating} friendRating={friend.cfRating} cfTiers={cfTiers} />
-      </div>
-      <div className="flex w-36 shrink-0 flex-col items-end gap-1">
-        <p className="text-3xl font-bold text-white">{friend.cfRating ?? '—'}</p>
-        {friend.cfRankTitle && <p className="text-xs text-blue-400">{friend.cfRankTitle}</p>}
-        <Sparkline data={friend.ratingSparkline} color="#3B82F6" />
-      </div>
-    </div>
-  </Card>
-)
-
-// ── Problems Solved ────────────────────────────────────────────────────────────
-
-const ProblemsSolvedRow = ({ you, friend }) => {
-  // Cross-side normalization: bars are relative to the global max across both sides
-  const allCounts = [
-    ...you.platformSolved.map(p => p.count),
-    ...friend.platformSolved.map(p => p.count),
-  ]
-  const globalMax = Math.max(...allCounts, 1)
-
-  const diff = friend.problems - you.problems
-
-  return (
-    <Card className="p-5">
-      <SectionLabel>Problems Solved</SectionLabel>
-      <div className="mt-4 flex flex-col items-center gap-6 lg:flex-row">
-        {/* You side */}
-        <div className="flex flex-1 flex-col gap-2.5">
-          {you.platformSolved.map(p => (
-            <div key={p.key} className="flex items-center gap-2">
-              <img src={PLATFORM_ICON[p.key]} alt={p.label} className="h-4 w-4 shrink-0 object-contain opacity-80" />
-              <span className="w-20 shrink-0 text-sm text-slate-300">{p.label}</span>
-              <span className="w-10 shrink-0 text-sm font-bold text-white">{fmt(p.count)}</span>
-              <div className="h-2 flex-1 overflow-hidden rounded-full bg-white/8">
-                <div className="h-full rounded-full" style={{ width: `${(p.count / globalMax) * 100}%`, backgroundColor: p.color }} />
-              </div>
-            </div>
-          ))}
-          <p className="mt-1 text-lg font-bold text-slate-300">
-            {fmt(you.problems)} <span className="text-sm font-normal text-slate-500">total</span>
-          </p>
-        </div>
-
-        {/* Centre diff pill */}
-        <div className="flex shrink-0 flex-col items-center gap-1">
-          <Code2 className="h-4 w-4 text-slate-500" />
-          <p className={`text-lg font-bold ${diff > 0 ? 'text-rose-400' : diff < 0 ? 'text-emerald-400' : 'text-white'}`}>
-            {diff > 0 ? `-${diff}` : diff < 0 ? `+${Math.abs(diff)}` : '='}
-          </p>
-          <p className="text-[10px] text-slate-500">problems</p>
-        </div>
-
-        {/* Friend side */}
-        <div className="flex flex-1 flex-col gap-2.5">
-          {friend.platformSolved.map(p => (
-            <div key={p.key} className="flex flex-row-reverse items-center gap-2">
-              <img src={PLATFORM_ICON[p.key]} alt={p.label} className="h-4 w-4 shrink-0 object-contain opacity-80" />
-              <span className="w-20 shrink-0 text-right text-sm text-slate-300">{p.label}</span>
-              <span className="w-10 shrink-0 text-right text-sm font-bold text-white">{fmt(p.count)}</span>
-              <div className="h-2 flex-1 overflow-hidden rounded-full bg-white/8">
-                <div className="ml-auto h-full rounded-full" style={{ width: `${(p.count / globalMax) * 100}%`, backgroundColor: p.color }} />
-              </div>
-            </div>
-          ))}
-          <p className="mt-1 text-right text-lg font-bold text-slate-300">
-            {fmt(friend.problems)} <span className="text-sm font-normal text-slate-500">total</span>
-          </p>
-        </div>
-      </div>
-    </Card>
-  )
-}
-
-// ── Contests ──────────────────────────────────────────────────────────────────
-
-const ContestBarChart = ({ data, color }) => (
-  <div className="h-16 w-full">
-    <ResponsiveContainer width="100%" height="100%">
-      <BarChart data={data} barSize={8} margin={{ top: 4, right: 4, bottom: 0, left: -24 }}>
-        <XAxis dataKey="label" tick={{ fill: '#64748b', fontSize: 9 }} tickLine={false} axisLine={false} />
-        <YAxis hide />
-        <Tooltip
-          contentStyle={{ background: '#0e1527', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 10, fontSize: 11 }}
-          cursor={{ fill: 'rgba(255,255,255,0.04)' }}
-        />
-        <Bar dataKey="count" fill={color} radius={[2, 2, 0, 0]} />
-      </BarChart>
-    </ResponsiveContainer>
-  </div>
-)
-
-const ContestsRow = ({ you, friend }) => {
-  const gap = friend.contests - you.contests
-  return (
-    <Card className="p-5">
-      <SectionLabel>Contests Attended</SectionLabel>
-      <div className="mt-3 flex flex-col items-center gap-4 lg:flex-row">
-        <div className="flex flex-1 items-center gap-3">
-          <div className="shrink-0">
-            <p className="text-3xl font-bold text-white">{you.contests}</p>
-            <p className="text-xs text-slate-500">contests</p>
-          </div>
-          <div className="flex-1"><ContestBarChart data={you.contestHistory} color="#7C3AED" /></div>
-        </div>
-        <div className="flex w-full shrink-0 flex-col items-center gap-2 lg:w-52">
-          <div className="flex h-1.5 w-full gap-0.5 overflow-hidden rounded-full">
-            <div className="h-full rounded-l-full bg-violet-500" style={{ flex: you.contests || 1 }} />
-            <div className="h-full rounded-r-full bg-blue-400" style={{ flex: friend.contests || 1 }} />
-          </div>
-          <div className="flex items-center gap-2 rounded-xl border border-amber-500/25 bg-amber-500/10 px-4 py-2">
-            <Trophy className="h-4 w-4 text-amber-400" />
-            <p className="text-sm font-semibold text-white">
-              {gap === 0 ? 'Tied!' : `${Math.abs(gap)} contests`}
-              <br /><span className="text-xs font-normal text-slate-400">
-                {gap > 0 ? 'you need to catch up' : gap < 0 ? 'you lead' : 'exactly even'}
-              </span>
-            </p>
-          </div>
-        </div>
-        <div className="flex flex-1 flex-row-reverse items-center gap-3">
-          <div className="shrink-0 text-right">
-            <p className="text-3xl font-bold text-white">{friend.contests}</p>
-            <p className="text-xs text-slate-500">contests</p>
-          </div>
-          <div className="flex-1"><ContestBarChart data={friend.contestHistory} color="#3B82F6" /></div>
-        </div>
-      </div>
-    </Card>
-  )
-}
-
-// ── Topic Comparison ──────────────────────────────────────────────────────────
-
-const TopicComparisonRow = ({ topicComparison, friendName }) => {
-  const maxVal = Math.max(...topicComparison.flatMap(t => [t.you, t.friend]), 1)
-  return (
-    <Card className="p-5">
-      <div className="mb-4 flex items-center justify-between">
-        <div>
-          <SectionLabel>Topic Strength Comparison</SectionLabel>
-          <p className="mt-0.5 text-xs text-slate-500">Problems solved per topic tag</p>
-        </div>
-        <div className="flex items-center gap-4 text-xs">
-          <span className="flex items-center gap-1.5">
-            <span className="inline-block h-2.5 w-2.5 rounded-sm bg-violet-500" />
-            <span className="text-slate-300">You</span>
-          </span>
-          <span className="flex items-center gap-1.5">
-            <span className="inline-block h-2.5 w-2.5 rounded-sm bg-blue-400" />
-            <span className="text-slate-300">{friendName?.split(' ')[0] ?? 'Friend'}</span>
-          </span>
-        </div>
-      </div>
-      <div className="space-y-3">
-        {topicComparison.map(({ name, you: yCount, friend: fCount }) => {
-          const youWins    = yCount > fCount
-          const friendWins = fCount > yCount
-          return (
-            <div key={name} className="flex items-center gap-3">
-              <span className="w-36 shrink-0 truncate text-sm text-slate-300" title={name}>{name}</span>
-              <span className={`w-10 shrink-0 text-right text-sm font-semibold ${youWins ? 'text-violet-300' : 'text-white'}`}>{yCount}</span>
-              <div className="flex h-2.5 flex-1 gap-0.5">
-                <div className="flex flex-1 items-center justify-end">
-                  <div className="h-full rounded-l-full bg-violet-500" style={{ width: `${(yCount / maxVal) * 100}%` }} />
-                </div>
-                <div className="flex flex-1 items-center">
-                  <div className="h-full rounded-r-full bg-blue-400" style={{ width: `${(fCount / maxVal) * 100}%` }} />
-                </div>
-              </div>
-              <span className={`w-10 shrink-0 text-sm font-semibold ${friendWins ? 'text-blue-300' : 'text-white'}`}>{fCount}</span>
-            </div>
-          )
-        })}
-        {topicComparison.length === 0 && (
-          <p className="py-6 text-center text-sm text-slate-500">
-            No topic data available yet. Fetch profiles to populate topic stats.
-          </p>
-        )}
-      </div>
-    </Card>
-  )
-}
-
-// ── Key Insights ──────────────────────────────────────────────────────────────
-
-const INSIGHT_STYLE = {
-  behind: { Icon: XCircle,     iconCls: 'text-rose-400',    titleCls: 'text-rose-400'    },
-  gap:    { Icon: AlertCircle, iconCls: 'text-amber-400',   titleCls: 'text-amber-300'   },
-  ahead:  { Icon: CheckCircle, iconCls: 'text-emerald-400', titleCls: 'text-emerald-400' },
-}
-
-const KeyInsights = ({ insights }) => (
-  <Card className="flex-1 p-5">
-    <div className="mb-4 flex items-center gap-2">
-      <Lightbulb className="h-4 w-4 text-yellow-400" />
-      <h2 className="text-sm font-semibold text-white">Key Insights</h2>
-    </div>
-    {insights.length === 0 ? (
-      <p className="py-4 text-center text-sm text-slate-500">No significant gaps — you're closely matched!</p>
-    ) : (
-      <div className="space-y-3">
-        {insights.map(({ id, type, title, detail }) => {
-          const { Icon, iconCls, titleCls } = INSIGHT_STYLE[type] ?? INSIGHT_STYLE.gap
-          return (
-            <div key={id} className="flex items-start gap-3 rounded-xl border border-white/6 bg-white/3 px-3 py-3">
-              <Icon className={`mt-0.5 h-4 w-4 shrink-0 ${iconCls}`} />
-              <div className="min-w-0">
-                <p className={`text-sm font-semibold ${titleCls}`}>{title}</p>
-                <p className="mt-0.5 text-xs text-slate-400">{detail}</p>
-              </div>
-              <ChevronRight className="mt-0.5 h-4 w-4 shrink-0 text-slate-600" />
-            </div>
-          )
-        })}
-      </div>
-    )}
-  </Card>
-)
-
-// ── Plan to Catch Up ──────────────────────────────────────────────────────────
-
-const PLAN_ICON_MAP = {
-  problems: { Icon: Code2,      bg: 'bg-blue-500/12',    cls: 'text-blue-300'    },
-  rating:   { Icon: TrendingUp, bg: 'bg-violet-500/12',  cls: 'text-violet-300'  },
-  contests: { Icon: Trophy,     bg: 'bg-amber-500/12',   cls: 'text-amber-300'   },
-  topics:   { Icon: BookOpen,   bg: 'bg-emerald-500/12', cls: 'text-emerald-300' },
-}
-
-const PlanToCatchUp = ({ plan }) => (
-  <Card className="flex-1 p-5">
-    <div className="mb-4 flex items-center gap-2">
-      <Target className="h-4 w-4 text-violet-400" />
-      <h2 className="text-sm font-semibold text-white">Plan to Catch Up</h2>
-    </div>
-    {plan.length === 0 ? (
-      <p className="py-4 text-center text-sm text-slate-500">You're already ahead — keep it up! 🏆</p>
-    ) : (
-      <div className="space-y-2.5">
-        {plan.map(({ id, icon, title, detail }) => {
-          const { Icon, bg, cls } = PLAN_ICON_MAP[icon] ?? PLAN_ICON_MAP.problems
-          return (
-            <div key={id} className="flex items-center gap-3 rounded-xl border border-white/6 bg-white/3 px-3 py-3">
-              <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl ${bg}`}>
-                <Icon className={`h-4 w-4 ${cls}`} />
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-medium text-white">{title}</p>
-                <p className="text-xs text-slate-500">{detail}</p>
-              </div>
-              <ChevronRight className="h-4 w-4 shrink-0 text-slate-600" />
-            </div>
-          )
-        })}
-      </div>
-    )}
-  </Card>
-)
-
-// ── ComparePage ────────────────────────────────────────────────────────────────
+const DEFAULT_TOPICS = [
+  { name: 'Array',       you: 180, friend: 160 },
+  { name: 'String',      you: 110, friend: 125 },
+  { name: 'Math',        you: 95,  friend: 75  },
+  { name: 'Tree',        you: 85,  friend: 50  },
+  { name: 'Dynamic Prog', you: 70, friend: 85  },
+  { name: 'Graph',       you: 60,  friend: 40  },
+]
 
 const ComparePage = () => {
-  const [friends,        setFriends]        = useState([])
-  const [selectedId,     setSelectedId]     = useState(null)
-  const [compareData,    setCompareData]    = useState(null)
-  const [loading,        setLoading]        = useState(false)
-  const [friendsLoading, setFriendsLoading] = useState(true)
-  const [error,          setError]          = useState(null)
-  const [swapped,        setSwapped]        = useState(false)
+  const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
+  const { user } = useAuth()
 
-  // Load friends list
+  // ── State ──
+  const [friends, setFriends] = useState([])
+  const [compareData, setCompareData] = useState(null)
+  const [loading, setLoading] = useState(false)
+  const [friendsLoading, setFriendsLoading] = useState(true)
+  const [error, setError] = useState(null)
+  const [swapped, setSwapped] = useState(false)
+  const [activeTab, setActiveTab] = useState('s') // 's': Score, 't': Topics, 'p': Plan
+  const [challengeSent, setChallengeSent] = useState(false)
+  const [checkedPlan, setCheckedPlan] = useState({})
+
+  // Derive selected friend ID from searchParams or first available friend
+  const selectedFriendId = searchParams.get('friend') || (friends[0]?.id ? String(friends[0].id) : '')
+
+  // ── 1. Load Friends List on Mount ──
   useEffect(() => {
     let cancelled = false
-    const load = async () => {
+    const loadFriends = async () => {
+      setFriendsLoading(true)
       try {
-        const res  = await fetch('/api/compare/friends', { credentials: 'include' })
+        const res = await fetch('/api/compare/friends', { credentials: 'include' })
         const data = await res.json()
         if (!res.ok) throw new Error(data.error?.message ?? `HTTP ${res.status}`)
         if (!cancelled) {
           setFriends(data.friends ?? [])
-          if (data.friends?.length > 0) setSelectedId(data.friends[0].id)
         }
       } catch (err) {
         if (!cancelled) setError(err.message)
@@ -620,153 +65,804 @@ const ComparePage = () => {
         if (!cancelled) setFriendsLoading(false)
       }
     }
-    load()
+    loadFriends()
     return () => { cancelled = true }
   }, [])
 
-  // Fetch compare data when friend selected
+  // ── 2. Load Comparison Data when selectedFriendId Changes ──
   useEffect(() => {
-    if (!selectedId) return
+    if (!selectedFriendId) return
     let cancelled = false
-    const load = async () => {
+
+    const fetchCompare = async () => {
       setLoading(true)
       setError(null)
+      setChallengeSent(false)
       try {
-        const res  = await fetch(`/api/compare?friendId=${selectedId}`, { credentials: 'include' })
+        const res = await fetch(`/api/compare?friendId=${selectedFriendId}`, { credentials: 'include' })
         const data = await res.json()
         if (!res.ok) throw new Error(data.error?.message ?? `HTTP ${res.status}`)
-        if (!cancelled) { setCompareData(data); setSwapped(false) }
+        if (!cancelled) {
+          setCompareData(data)
+          setSwapped(false)
+        }
       } catch (err) {
         if (!cancelled) setError(err.message)
       } finally {
         if (!cancelled) setLoading(false)
       }
     }
-    load()
+
+    fetchCompare()
     return () => { cancelled = true }
-  }, [selectedId])
+  }, [selectedFriendId])
 
-  // Derived — handle swap
-  const you    = swapped ? compareData?.friend : compareData?.you
-  const friend = swapped ? compareData?.you    : compareData?.friend
-  const hasData = Boolean(compareData && you && friend)
+  // ── Data Transformations ──
+  const rawYou = compareData?.you
+  const rawFriend = compareData?.friend
 
-  // Adjust winner for swap state
-  const winnerIsYou =
-    compareData?.winner?.overall === 'you' && !swapped ||
-    compareData?.winner?.overall === 'friend' && swapped
+  // Format You side object
+  const youObj = useMemo(() => {
+    if (!rawYou) return null
+    const platMap = Object.fromEntries(
+      (rawYou.platformSolved || []).map(p => [p.key, p.count])
+    )
+    return {
+      n: rawYou.displayName || user?.name || 'You',
+      tag: 'You',
+      ini: (rawYou.displayName || user?.name || 'K')[0].toUpperCase(),
+      sub: rawYou.bio || 'SRM IST · Active',
+      col: 'var(--you)',
+      isYou: true,
+      composite: Math.round(rawYou.compositeScore ?? 0),
+      streak: rawYou.streak ?? 0,
+      prob: rawYou.problems ?? 0,
+      cont: rawYou.contests ?? 0,
+      days: rawYou.activeDays ?? 0,
+      rate: rawYou.cfRating ?? 0,
+      plat: PLATFORMS.map(p => platMap[p.key] ?? 0),
+      cm: (rawYou.contestHistory || []).map(c => c.count ?? 0),
+      cmLabels: (rawYou.contestHistory || []).map(c => c.label),
+    }
+  }, [rawYou, user])
 
-  const winnerIsFriend =
-    compareData?.winner?.overall === 'friend' && !swapped ||
-    compareData?.winner?.overall === 'you' && swapped
+  // Format Friend side object
+  const friendObj = useMemo(() => {
+    if (!rawFriend) return null
+    const platMap = Object.fromEntries(
+      (rawFriend.platformSolved || []).map(p => [p.key, p.count])
+    )
+    return {
+      n: rawFriend.displayName,
+      tag: 'Friend',
+      ini: (rawFriend.displayName || 'F')[0].toUpperCase(),
+      sub: rawFriend.bio || 'Active',
+      col: 'var(--foe)',
+      isYou: false,
+      composite: Math.round(rawFriend.compositeScore ?? 0),
+      streak: rawFriend.streak ?? 0,
+      prob: rawFriend.problems ?? 0,
+      cont: rawFriend.contests ?? 0,
+      days: rawFriend.activeDays ?? 0,
+      rate: rawFriend.cfRating ?? 0,
+      plat: PLATFORMS.map(p => platMap[p.key] ?? 0),
+      cm: (rawFriend.contestHistory || []).map(c => c.count ?? 0),
+      cmLabels: (rawFriend.contestHistory || []).map(c => c.label),
+    }
+  }, [rawFriend])
 
-  // Only show CF section if at least one side has CF data
-  const showCF = hasData && (you.hasCF || friend.hasCF)
+  // Side switching (swapped)
+  const leftSide = swapped ? friendObj : youObj
+  const rightSide = swapped ? youObj : friendObj
+
+  // Category comparison scores
+  const scoreStats = useMemo(() => {
+    if (!youObj || !friendObj) return { wa: 0, wb: 0, chips: [] }
+    let wa = 0
+    let wb = 0
+
+    const chips = CATEGORIES.map(({ label, key }) => {
+      const yVal = youObj[key] ?? 0
+      const fVal = friendObj[key] ?? 0
+      if (yVal > fVal) {
+        wa++
+        return { label, winner: 'You', winClass: '' }
+      }
+      if (fVal > yVal) {
+        wb++
+        return { label, winner: friendObj.n, winClass: 'f' }
+      }
+      return { label, winner: 'Tie', winClass: 'tie' }
+    })
+
+    return { wa, wb, chips }
+  }, [youObj, friendObj])
+
+  // Head to Head Heading & Subtitle
+  const leadHeading = useMemo(() => {
+    const { wa, wb } = scoreStats
+    if (wa > wb) return `You lead ${wa} to ${wb}`
+    if (wb > wa) return `${friendObj?.n || 'Friend'} leads ${wb} to ${wa}`
+    return 'All square'
+  }, [scoreStats, friendObj])
+
+  const leadSubtitle = useMemo(() => {
+    if (!youObj || !friendObj) return ''
+    const probDiff = Math.abs(youObj.prob - friendObj.prob)
+    const contDiff = Math.abs(youObj.cont - friendObj.cont)
+    const leader = youObj.prob >= friendObj.prob ? 'You are ahead' : `${friendObj.n} is ahead`
+    return `${leader} by ${probDiff} problems and ${contDiff} contests. Compare platform breakdowns, topic radar, and consistency.`
+  }, [youObj, friendObj])
+
+  // 6-Month Contest History labels & values
+  const monthLabels = useMemo(() => {
+    if (youObj?.cmLabels?.length >= 6) return youObj.cmLabels.slice(0, 6)
+    if (friendObj?.cmLabels?.length >= 6) return friendObj.cmLabels.slice(0, 6)
+    return ['May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct']
+  }, [youObj, friendObj])
+
+  const maxMonthCount = useMemo(() => {
+    const all = [...(youObj?.cm || []), ...(friendObj?.cm || [])]
+    return Math.max(...all, 4)
+  }, [youObj, friendObj])
+
+  // Topic radar calculations
+  const radarTopics = useMemo(() => {
+    if (compareData?.topicComparison && compareData.topicComparison.length >= 4) {
+      return compareData.topicComparison.slice(0, 6).map(t => ({
+        name: t.name,
+        you: t.you ?? 0,
+        friend: t.friend ?? 0,
+      }))
+    }
+    return DEFAULT_TOPICS
+  }, [compareData])
+
+  const maxTopicVal = useMemo(() => {
+    const maxVal = Math.max(...radarTopics.map(t => Math.max(t.you, t.friend)))
+    return maxVal > 0 ? maxVal : 100
+  }, [radarTopics])
+
+  // SVG Radar coordinates generator
+  const radarData = useMemo(() => {
+    const cx = 150
+    const cy = 130
+    const R = 84
+    const n = radarTopics.length
+    const angle = (i) => (i / n) * 2 * Math.PI - Math.PI / 2
+    const point = (i, k) => `${cx + Math.cos(angle(i)) * R * k},${cy + Math.sin(angle(i)) * R * k}`
+
+    const rings = [0.33, 0.66, 1].map(f => {
+      return radarTopics.map((_, i) => point(i, f)).join(' ')
+    })
+
+    const youPoints = radarTopics.map((t, i) => point(i, Math.min(1, Math.max(0.08, t.you / maxTopicVal)))).join(' ')
+    const friendPoints = radarTopics.map((t, i) => point(i, Math.min(1, Math.max(0.08, t.friend / maxTopicVal)))).join(' ')
+
+    const labels = radarTopics.map((t, i) => ({
+      name: t.name,
+      x: cx + Math.cos(angle(i)) * (R + 24),
+      y: cy + Math.sin(angle(i)) * (R + 18) + 4,
+    }))
+
+    return { rings, youPoints, friendPoints, labels }
+  }, [radarTopics, maxTopicVal])
+
+  // Key Insights list
+  const insightsList = useMemo(() => {
+    if (compareData?.insights && compareData.insights.length > 0) {
+      return compareData.insights.map(item => ({
+        id: item.id || item.title,
+        title: item.title,
+        sub: item.detail || item.sub || '',
+        isYou: item.isYou ?? (item.type === 'ahead'),
+      }))
+    }
+    if (!youObj || !friendObj) return []
+    const items = []
+    const pDiff = youObj.prob - friendObj.prob
+    if (pDiff >= 0) {
+      items.push({
+        id: 'p1',
+        title: `You've solved ${pDiff} more problems`,
+        sub: 'You lead in total problems solved.',
+        isYou: true,
+      })
+    } else {
+      items.push({
+        id: 'p1',
+        title: `${friendObj.n} has solved ${Math.abs(pDiff)} more problems`,
+        sub: 'Focus on daily consistency to bridge the gap.',
+        isYou: false,
+      })
+    }
+
+    const sDiff = youObj.streak - friendObj.streak
+    if (sDiff >= 0) {
+      items.push({
+        id: 's1',
+        title: `Your streak is ${sDiff} days longer`,
+        sub: 'Great consistency. Keep it up.',
+        isYou: true,
+      })
+    } else {
+      items.push({
+        id: 's1',
+        title: `${friendObj.n}'s streak is ${Math.abs(sDiff)} days longer`,
+        sub: 'Solve 1 problem every day to build momentum.',
+        isYou: false,
+      })
+    }
+
+    // Gaps in topics
+    radarTopics.forEach((t, i) => {
+      const diff = t.friend - t.you
+      if (diff > 10 && items.length < 5) {
+        items.push({
+          id: `top-${i}`,
+          title: `Gap in ${t.name}`,
+          sub: `${friendObj.n} has solved ${diff} more ${t.name} problems.`,
+          isYou: false,
+        })
+      }
+    })
+
+    return items
+  }, [compareData, youObj, friendObj, radarTopics])
+
+  // Plan items
+  const planItems = useMemo(() => {
+    if (compareData?.plan && compareData.plan.length > 0) {
+      return compareData.plan.map(p => {
+        if (typeof p === 'string') return p
+        return p.title ? `${p.title}${p.detail ? ` — ${p.detail}` : ''}` : p.detail
+      })
+    }
+    const plans = []
+    radarTopics.forEach(t => {
+      if (t.friend > t.you && plans.length < 3) {
+        plans.push(`Solve 5 ${t.name} problems this week`)
+      }
+    })
+    plans.push('Keep the daily streak active')
+    plans.push('Compete in the upcoming weekend contest')
+    return plans
+  }, [compareData, radarTopics])
+
+  const togglePlanCheck = (idx) => {
+    setCheckedPlan(prev => ({ ...prev, [idx]: !prev[idx] }))
+  }
+
+  // Handle Challenge Button Click
+  const handleChallenge = () => {
+    setChallengeSent(true)
+    setTimeout(() => setChallengeSent(false), 4000)
+  }
 
   return (
-    <div className="-mx-4 min-w-0 overflow-x-auto px-4 pb-2 md:mx-0 md:overflow-visible md:px-0">
-      <div className="w-[720px] space-y-5 md:w-full">
-
-      <p className="text-center text-xs text-slate-500 md:hidden">
-        Swipe horizontally to explore the comparison
-      </p>
-
-      {/* Page header */}
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-white">Compare Profiles</h1>
-          <p className="mt-1 text-sm text-slate-400">
-            Side-by-side comparison across all platforms — problems, topics, contests, and consistency.
-          </p>
+    <div className="cc-compare">
+      {/* ── Error Banner ── */}
+      {error && (
+        <div
+          style={{
+            padding: '12px 18px',
+            borderRadius: 16,
+            background: 'rgba(255, 107, 107, 0.12)',
+            border: '1px solid rgba(255, 107, 107, 0.25)',
+            color: '#ff6b6b',
+            fontSize: 14,
+          }}
+        >
+          {error}
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <FriendSelector
-            friends={friends}
-            selectedId={selectedId}
-            onChange={setSelectedId}
-            loading={friendsLoading}
-          />
-          {hasData && (
+      )}
+
+      {/* ── Loading Skeleton / State ── */}
+      {(loading || (friendsLoading && !compareData)) && (
+        <section className="c" style={{ textAlign: 'center', padding: '60px 20px' }}>
+          <span className="m">Loading comparison…</span>
+        </section>
+      )}
+
+      {/* ── Empty State: No Friends ── */}
+      {!loading && !friendsLoading && friends.length === 0 && (
+        <section className="c" style={{ textAlign: 'center', padding: '60px 20px' }}>
+          <h2>No friends in your circle yet</h2>
+          <p className="m" style={{ margin: '8px 0 20px' }}>
+            Add friends to compare stats, head-to-head categories, topic mastery, and contest records.
+          </p>
+          <button
+            type="button"
+            className="p"
+            onClick={() => navigate('/friends')}
+          >
+            Go to Friends
+          </button>
+        </section>
+      )}
+
+      {/* ── Loaded Content ── */}
+      {!loading && youObj && friendObj && (
+        <>
+          {/* ── Hero Section (Head to head) ── */}
+          <section className="c">
+            <div className="cc-compare-hero-header">
+              <span className="m">Head to head</span>
+              {/* Friend Selector Dropdown */}
+              <div className="cc-comp-against-wrap">
+                <span className="m cc-comp-against-label">Comparing against:</span>
+                <select
+                  value={selectedFriendId}
+                  onChange={(e) => setSearchParams({ friend: e.target.value })}
+                  className="cc-sort-select"
+                  aria-label="Select friend to compare"
+                >
+                  {friends.map(f => (
+                    <option key={f.id} value={f.id}>{f.displayName}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <h1>{leadHeading}</h1>
+            <p className="m" style={{ margin: 0 }}>
+              {leadSubtitle}
+            </p>
+
+            {/* Chips */}
+            <div className="chips">
+              {scoreStats.chips.map(c => (
+                <span key={c.label} className={`chip ${c.winClass}`}>
+                  {c.label} · {c.winner}
+                </span>
+              ))}
+            </div>
+
+            {/* Buttons */}
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+              <button
+                type="button"
+                className="p"
+                onClick={handleChallenge}
+              >
+                {challengeSent ? 'Goal challenge sent! ✓' : `Challenge ${friendObj.n} to a weekly goal`}
+              </button>
+              <button
+                type="button"
+                onClick={() => setSwapped(s => !s)}
+              >
+                Swap sides
+              </button>
+            </div>
+          </section>
+
+          {/* ── VS Row (pa VS pb) ── */}
+          <section className="vs">
+            {/* Left Card */}
+            <div className="c">
+              <div className="pl">
+                <div
+                  className="av"
+                  style={{
+                    background: leftSide.col,
+                    color: leftSide.isYou ? 'var(--on)' : '#fff',
+                  }}
+                >
+                  {leftSide.ini}
+                </div>
+                <div style={{ minWidth: 0, overflow: 'hidden' }}>
+                  <div className="n" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {leftSide.n} <span className="m" style={{ fontSize: 13, fontWeight: 400 }}>{leftSide.tag}</span>
+                  </div>
+                  <div className="m" style={{ fontSize: 14, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {leftSide.sub}
+                  </div>
+                </div>
+              </div>
+
+              <div className="mini">
+                <div>
+                  <b className="mono">{leftSide.streak}</b>
+                  <small>day streak</small>
+                </div>
+                <div>
+                  <b className="mono">{leftSide.prob}</b>
+                  <small>problems</small>
+                </div>
+                <div>
+                  <b className="mono">{leftSide.cont}</b>
+                  <small>contests</small>
+                </div>
+                <div>
+                  <b className="mono">{leftSide.days}</b>
+                  <small>active days</small>
+                </div>
+              </div>
+            </div>
+
+            {/* VS Badge */}
+            <div className="vsb m mono" style={{ fontWeight: 700 }}>
+              VS
+            </div>
+
+            {/* Right Card */}
+            <div className="c r">
+              <div className="pl r">
+                <div
+                  className="av"
+                  style={{
+                    background: rightSide.col,
+                    color: rightSide.isYou ? 'var(--on)' : '#fff',
+                  }}
+                >
+                  {rightSide.ini}
+                </div>
+                <div style={{ minWidth: 0, overflow: 'hidden' }}>
+                  <div className="n" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {rightSide.n} <span className="m" style={{ fontSize: 13, fontWeight: 400 }}>{rightSide.tag}</span>
+                  </div>
+                  <div className="m" style={{ fontSize: 14, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {rightSide.sub}
+                  </div>
+                </div>
+              </div>
+
+              <div className="mini" style={{ justifyContent: 'flex-end' }}>
+                <div>
+                  <b className="mono">{rightSide.streak}</b>
+                  <small>day streak</small>
+                </div>
+                <div>
+                  <b className="mono">{rightSide.prob}</b>
+                  <small>problems</small>
+                </div>
+                <div>
+                  <b className="mono">{rightSide.cont}</b>
+                  <small>contests</small>
+                </div>
+                <div>
+                  <b className="mono">{rightSide.days}</b>
+                  <small>active days</small>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          {/* ── Tabs (Score, Topics, Plan) ── */}
+          <div className="tabs">
             <button
               type="button"
-              onClick={() => setSwapped(s => !s)}
-              className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-medium text-slate-300 transition-colors hover:bg-white/8 hover:text-white"
+              className={activeTab === 's' ? 'on' : ''}
+              onClick={() => setActiveTab('s')}
             >
-              <ArrowLeftRight className="h-4 w-4" />
-              Swap
+              Score
             </button>
-          )}
-        </div>
-      </div>
-
-      {/* Error */}
-      {error && (
-        <div className="rounded-xl bg-rose-500/10 px-4 py-3 text-sm text-rose-300">{error}</div>
-      )}
-
-      {/* Loading */}
-      {(loading || (friendsLoading && !compareData)) && (
-        <div className="flex items-center justify-center py-24">
-          <Loader2 className="h-8 w-8 animate-spin text-violet-400" />
-        </div>
-      )}
-
-      {/* No friends */}
-      {!loading && !friendsLoading && friends.length === 0 && !error && (
-        <Card className="p-12 text-center">
-          <Users className="mx-auto mb-3 h-10 w-10 text-slate-600" />
-          <p className="text-base font-semibold text-white">No friends yet</p>
-          <p className="mt-1 text-sm text-slate-500">
-            Add a friend from the Friends page, then come back to compare.
-          </p>
-        </Card>
-      )}
-
-      {/* Main content */}
-      {hasData && !loading && (
-        <>
-          {/* Winner banner */}
-          <WinnerBanner
-            winner={compareData.winner}
-            you={compareData.you}
-            friend={compareData.friend}
-            swapped={swapped}
-          />
-
-          {/* Identity cards */}
-          <div className="flex items-stretch gap-3">
-            <UserCard user={you} isYou={!swapped} isWinner={winnerIsYou} />
-            <VSBadge />
-            <UserCard user={friend} isYou={swapped} isWinner={winnerIsFriend} flipped />
+            <button
+              type="button"
+              className={activeTab === 't' ? 'on' : ''}
+              onClick={() => setActiveTab('t')}
+            >
+              Topics
+            </button>
+            <button
+              type="button"
+              className={activeTab === 'p' ? 'on' : ''}
+              onClick={() => setActiveTab('p')}
+            >
+              Plan
+            </button>
           </div>
 
-          {/* CF Rating — only if at least one side has CF */}
-          {showCF && (
-            <CFRatingRow you={you} friend={friend} cfTiers={compareData.cfTiers} />
+          {/* ── TAB 1: SCORE ── */}
+          {activeTab === 's' && (
+            <div className="g">
+              {/* Left Column: Category by category */}
+              <div className="c">
+                <div className="hd">
+                  <h2>Category by category</h2>
+                  <span className="m" style={{ fontSize: 13 }}>Brighter bar wins</span>
+                </div>
+
+                <div>
+                  {CATEGORIES.map(({ label, key }) => {
+                    const lVal = leftSide[key] ?? 0
+                    const rVal = rightSide[key] ?? 0
+                    const maxVal = Math.max(lVal, rVal, 1)
+                    const leftPct = Math.round((lVal / maxVal) * 100)
+                    const rightPct = Math.round((rVal / maxVal) * 100)
+                    const leftWins = lVal > rVal
+                    const rightWins = rVal > lVal
+
+                    return (
+                      <div className="mr" key={key}>
+                        {/* Left Side */}
+                        <div
+                          className={`side l ${leftWins ? 'win' : ''}`}
+                          style={{ '--col': leftSide.col }}
+                        >
+                          <b className="mono">{lVal || '—'}</b>
+                          <div className="t">
+                            <span style={{ width: `${leftPct}%` }} />
+                          </div>
+                        </div>
+
+                        {/* Center Label */}
+                        <div className="lab">{label}</div>
+
+                        {/* Right Side */}
+                        <div
+                          className={`side ${rightWins ? 'win' : ''}`}
+                          style={{ '--col': rightSide.col }}
+                        >
+                          <b className="mono">{rVal || '—'}</b>
+                          <div className="t">
+                            <span style={{ width: `${rightPct}%` }} />
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+
+              {/* Right Column: Platform breakdown & 6-month contests */}
+              <div style={{ display: 'grid', gap: 12, alignContent: 'start' }}>
+                {/* Problems by platform */}
+                <div className="c">
+                  <div className="hd">
+                    <h2>Problems by platform</h2>
+                  </div>
+
+                  <div>
+                    {PLATFORMS.map(({ label }, idx) => {
+                      const lVal = leftSide.plat[idx] ?? 0
+                      const rVal = rightSide.plat[idx] ?? 0
+                      const maxVal = Math.max(lVal, rVal, 1)
+                      const leftPct = Math.round((lVal / maxVal) * 100)
+                      const rightPct = Math.round((rVal / maxVal) * 100)
+                      const leftWins = lVal > rVal
+                      const rightWins = rVal > lVal
+
+                      return (
+                        <div className="mr" key={label}>
+                          <div
+                            className={`side l ${leftWins ? 'win' : ''}`}
+                            style={{ '--col': leftSide.col }}
+                          >
+                            <b className="mono">{lVal || '—'}</b>
+                            <div className="t">
+                              <span style={{ width: `${leftPct}%` }} />
+                            </div>
+                          </div>
+
+                          <div className="lab">{label}</div>
+
+                          <div
+                            className={`side ${rightWins ? 'win' : ''}`}
+                            style={{ '--col': rightSide.col }}
+                          >
+                            <b className="mono">{rVal || '—'}</b>
+                            <div className="t">
+                              <span style={{ width: `${rightPct}%` }} />
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+
+                {/* Contests, last 6 months */}
+                <div className="c">
+                  <div className="hd">
+                    <h2>Contests, last 6 months</h2>
+                    <span className="m" style={{ fontSize: 13 }}>
+                      {leftSide.n} {leftSide.cont} · {rightSide.n} {rightSide.cont}
+                    </span>
+                  </div>
+
+                  {/* 6 Month Columns */}
+                  <div className="cols">
+                    {monthLabels.map((m, i) => {
+                      const lCount = leftSide.cm[i] ?? 0
+                      const rCount = rightSide.cm[i] ?? 0
+                      const lHeight = Math.max(4, Math.round((lCount / maxMonthCount) * 100))
+                      const rHeight = Math.max(4, Math.round((rCount / maxMonthCount) * 100))
+
+                      return (
+                        <div key={m}>
+                          <div
+                            style={{
+                              display: 'flex',
+                              gap: 3,
+                              alignItems: 'flex-end',
+                              height: 68,
+                              width: '100%',
+                              justifyContent: 'center',
+                            }}
+                          >
+                            <span
+                              style={{
+                                width: '38%',
+                                minHeight: 3,
+                                background: leftSide.col,
+                                height: `${lHeight}%`,
+                              }}
+                            />
+                            <span
+                              style={{
+                                width: '38%',
+                                minHeight: 3,
+                                background: rightSide.col,
+                                height: `${rHeight}%`,
+                              }}
+                            />
+                          </div>
+                          {m}
+                        </div>
+                      )
+                    })}
+                  </div>
+
+                  <div className="gap">
+                    <b>
+                      {Math.abs(leftSide.cont - rightSide.cont)} {leftSide.cont >= rightSide.cont ? 'more contests' : 'fewer contests'}
+                    </b>{' '}
+                    than {rightSide.n}. Consistency in weekend contests keeps you sharp.
+                  </div>
+                </div>
+              </div>
+            </div>
           )}
 
-          {/* Problems Solved */}
-          {(you.platformSolved?.length > 0 || friend.platformSolved?.length > 0) && (
-            <ProblemsSolvedRow you={you} friend={friend} />
+          {/* ── TAB 2: TOPICS ── */}
+          {activeTab === 't' && (
+            <div className="g g-even">
+              {/* Left Column: Topic Radar SVG */}
+              <div className="c">
+                <div className="hd">
+                  <h2>Topic radar</h2>
+                </div>
+
+                <svg
+                  viewBox="0 0 300 260"
+                  style={{ margin: 'auto', display: 'block', maxWidth: 420, width: '100%' }}
+                >
+                  {/* Concentric rings */}
+                  {radarData.rings.map((pts, i) => (
+                    <polygon
+                      key={i}
+                      fill="none"
+                      stroke="var(--line)"
+                      strokeWidth="1"
+                      points={pts}
+                    />
+                  ))}
+
+                  {/* Left Side polygon */}
+                  <polygon
+                    fill={leftSide.col}
+                    fillOpacity="0.22"
+                    stroke={leftSide.col}
+                    strokeWidth="2.5"
+                    strokeLinejoin="round"
+                    points={swapped ? radarData.friendPoints : radarData.youPoints}
+                  />
+
+                  {/* Right Side polygon */}
+                  <polygon
+                    fill={rightSide.col}
+                    fillOpacity="0.22"
+                    stroke={rightSide.col}
+                    strokeWidth="2.5"
+                    strokeLinejoin="round"
+                    points={swapped ? radarData.youPoints : radarData.friendPoints}
+                  />
+
+                  {/* Axis labels */}
+                  {radarData.labels.map(l => (
+                    <text
+                      key={l.name}
+                      x={l.x}
+                      y={l.y}
+                      textAnchor="middle"
+                      fontSize="12"
+                      fill="var(--mute)"
+                    >
+                      {l.name}
+                    </text>
+                  ))}
+                </svg>
+              </div>
+
+              {/* Right Column: Topic Winners */}
+              <div className="c">
+                <div className="hd">
+                  <h2>Winners</h2>
+                </div>
+
+                <div>
+                  {radarTopics.map(t => {
+                    const lVal = swapped ? t.friend : t.you
+                    const rVal = swapped ? t.you : t.friend
+                    const leftWins = lVal >= rVal
+
+                    return (
+                      <div
+                        className="mr"
+                        key={t.name}
+                        style={{ gridTemplateColumns: '1fr auto', padding: '12px 0' }}
+                      >
+                        <span style={{ fontSize: 14 }}>
+                          {t.name}
+                          {leftWins && <span className="crown">♛</span>}
+                        </span>
+                        <span className="mono">
+                          <b style={{ fontSize: 20, color: leftWins ? leftSide.col : 'var(--mute)' }}>
+                            {lVal}
+                          </b>
+                          <span className="m" style={{ margin: '0 6px' }}>·</span>
+                          <b style={{ fontSize: 20, color: !leftWins ? rightSide.col : 'var(--mute)' }}>
+                            {rVal}
+                          </b>
+                        </span>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            </div>
           )}
 
-          {/* Contests */}
-          <ContestsRow you={you} friend={friend} />
+          {/* ── TAB 3: PLAN ── */}
+          {activeTab === 'p' && (
+            <div className="g g-even">
+              {/* Left Column: Key Insights */}
+              <div className="c">
+                <div className="hd">
+                  <h2>Key insights</h2>
+                </div>
 
-          {/* Topic Comparison */}
-          <TopicComparisonRow
-            topicComparison={compareData.topicComparison ?? []}
-            friendName={friend.displayName}
-          />
+                <div>
+                  {insightsList.map(item => (
+                    <div className="step" key={item.id}>
+                      <span>
+                        <b style={{ color: item.isYou ? 'var(--you)' : 'var(--foe)' }}>
+                          {item.title}
+                        </b>
+                        <br />
+                        <span className="m" style={{ fontSize: 13 }}>
+                          {item.sub}
+                        </span>
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
 
-          {/* Insights + Plan */}
-          <div className="flex flex-col gap-5 lg:flex-row">
-            <KeyInsights insights={compareData.insights ?? []} />
-            <PlanToCatchUp plan={compareData.plan ?? []} />
-          </div>
+              {/* Right Column: Plan to close the gaps */}
+              <div className="c" style={{ alignSelf: 'start' }}>
+                <div className="hd">
+                  <h2>Plan to close the gaps</h2>
+                </div>
+
+                <div>
+                  {planItems.map((task, idx) => (
+                    <label className="step" key={idx} style={{ cursor: 'pointer' }}>
+                      <input
+                        type="checkbox"
+                        checked={Boolean(checkedPlan[idx])}
+                        onChange={() => togglePlanCheck(idx)}
+                      />
+                      <span style={{ fontSize: 14 }}>{task}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
         </>
       )}
-      </div>
     </div>
   )
 }

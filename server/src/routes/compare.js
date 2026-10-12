@@ -17,6 +17,7 @@ import { Router } from 'express'
 import requireAuth from '../middleware/requireAuth.js'
 import { getSavedProfiles } from '../repositories/profileData.js'
 import { getTagsForSnapshot, getRatingSparkline } from '../repositories/snapshots.js'
+import { scoreProfile, computeCompositeScore, computeGapAnalysis } from '../scoring/index.js'
 import pool from '../db/pool.js'
 
 const router = Router()
@@ -158,8 +159,14 @@ router.get('/', async (req, res) => {
   )
 
   // ── Build side objects ────────────────────────────────────────────────────
-  const youSide    = buildSide(enrichedMyHandles,    req.user.name ?? req.user.email ?? 'You',    true)
-  const friendSide = buildSide(enrichedFriendHandles, friendRow.display_name, false)
+  const rawIncludeContests = req.query.includeContests
+  const includeContests = rawIncludeContests === 'true' || (rawIncludeContests === undefined && Boolean(req.user.include_contests))
+
+  const youSide    = buildSide(enrichedMyHandles,    req.user.name ?? req.user.email ?? 'You',    true,  includeContests)
+  const friendSide = buildSide(enrichedFriendHandles, friendRow.display_name, false, includeContests)
+
+  // ── Mathematical Gap Analysis (Plan §8.6) ─────────────────────────────────
+  const gapAnalysis = computeGapAnalysis(youSide.skillData, friendSide.skillData, youSide.avgWeight)
 
   // ── Determine overall winner ──────────────────────────────────────────────
   const winner = determineWinner(youSide, friendSide)
@@ -178,8 +185,8 @@ router.get('/', async (req, res) => {
     .map((t, i) => ({ ...t, color: TOPIC_COLORS[i % TOPIC_COLORS.length] }))
 
   // ── Derive insights & plan ────────────────────────────────────────────────
-  const insights = deriveInsights(youSide, friendSide)
-  const plan     = derivePlan(youSide, friendSide)
+  const insights = deriveInsights(youSide, friendSide, gapAnalysis)
+  const plan     = derivePlan(youSide, friendSide, gapAnalysis)
 
   res.json({
     you:             youSide,
@@ -187,6 +194,7 @@ router.get('/', async (req, res) => {
     topicComparison,
     insights,
     plan,
+    gapAnalysis,
     winner,
     cfTiers:         CF_TIERS,
   })
@@ -195,7 +203,7 @@ router.get('/', async (req, res) => {
 // ── buildSide ─────────────────────────────────────────────────────────────────
 // Takes enriched handle objects (with .tags array from snapshot_tag_stats)
 
-function buildSide(handles, displayName, isYou) {
+function buildSide(handles, displayName, isYou, includeContests = false) {
   // ── Activity & streak ─────────────────────────────────────────────────────
   const combinedActivity = {}
   for (const h of handles) {
@@ -217,9 +225,36 @@ function buildSide(handles, displayName, isYou) {
   const cfRankTitle = cfHandle?.rankTitle ?? null
 
   // ── Rating sparkline (from rating_history via DB) ─────────────────────────
-  // Use CF sparkline first, then fall back to any platform that has history
   const sparklineSource = cfHandle ?? handles.find(h => h.sparkline?.length > 0)
   const ratingSparkline = (sparklineSource?.sparkline ?? []).map(r => r.new_rating ?? r)
+
+  // ── Scoring Engine: Per-platform & Composite Scores ───────────────────────
+  const platformScores = {}
+  const allTopicMastery = {}
+  let totalWeight = 0
+  let weightedHandles = 0
+
+  for (const h of handles) {
+    const profileData = {
+      ...h,
+      topics: (h.tags ?? []).map(t => ({
+        slug: t.tag,
+        name: t.tag,
+        problemsSolved: Number(t.solved_count) || 0,
+      })),
+      solvedByBucket: h.solvedByBucket ?? h.solved_by_bucket ?? null,
+      rating: h.rating,
+      problemsSolved: h.problemsSolved,
+    }
+    const scored = scoreProfile(h.platform, profileData, { includeContests })
+    platformScores[h.platform] = scored.platformScore
+    totalWeight += scored.avgWeight
+    weightedHandles += 1
+    Object.assign(allTopicMastery, scored.topicMastery)
+  }
+
+  const composite = computeCompositeScore(platformScores)
+  const avgWeight = weightedHandles > 0 ? Number((totalWeight / weightedHandles).toFixed(4)) : 1.0
 
   // ── Platform solved breakdown ─────────────────────────────────────────────
   const platformSolved = PLATFORM_ORDER
@@ -230,13 +265,11 @@ function buildSide(handles, displayName, isYou) {
         key:   id,
         label: PLATFORM_LABEL[id],
         count: Number(h.problemsSolved) || 0,
+        score: platformScores[id] ?? 0,
         color: PLATFORM_COLOR[id],
       }
     })
     .filter(Boolean)
-
-  // pct is computed cross-side in the route after both sides are built
-  // (normalization happens in the frontend using the cross-side max)
 
   // ── Contest history — monthly bucket (last 6 months) ─────────────────────
   const allContestDates = []
@@ -301,6 +334,12 @@ function buildSide(handles, displayName, isYou) {
     topicsRaw,
     platforms:    handles.map(h => h.platform),
     lastSyncedAt: lastSyncedAt?.toISOString() ?? null,
+    platformScores,
+    compositeScore:   composite.compositeScore,
+    connectedScore:   composite.connectedScore,
+    missingPlatforms: composite.missingPlatforms,
+    avgWeight,
+    skillData: { topicMastery: allTopicMastery },
   }
 }
 
@@ -310,12 +349,13 @@ function determineWinner(you, friend) {
   // Score each side across multiple dimensions
   // Each dimension awards 1 point to the leader; tied dimensions award 0.5 each
   const dimensions = [
-    { label: 'Problems Solved', you: you.problems,    friend: friend.problems    },
-    { label: 'Contests',        you: you.contests,    friend: friend.contests    },
-    { label: 'Active Days',     you: you.activeDays,  friend: friend.activeDays  },
-    { label: 'Streak',          you: you.streak,      friend: friend.streak      },
-    { label: 'CF Rating',       you: you.cfRating ?? 0, friend: friend.cfRating ?? 0 },
-    { label: 'Topics Coverage', you: you.topicsRaw.length, friend: friend.topicsRaw.length },
+    { label: 'Composite Score', you: you.compositeScore ?? 0, friend: friend.compositeScore ?? 0 },
+    { label: 'Problems Solved', you: you.problems,            friend: friend.problems            },
+    { label: 'Contests',        you: you.contests,            friend: friend.contests            },
+    { label: 'Active Days',     you: you.activeDays,          friend: friend.activeDays          },
+    { label: 'Streak',          you: you.streak,              friend: friend.streak              },
+    { label: 'CF Rating',       you: you.cfRating ?? 0,       friend: friend.cfRating ?? 0       },
+    { label: 'Topics Coverage', you: you.topicsRaw.length,    friend: friend.topicsRaw.length    },
   ]
 
   let youScore    = 0
@@ -346,8 +386,20 @@ function determineWinner(you, friend) {
 
 // ── deriveInsights ────────────────────────────────────────────────────────────
 
-function deriveInsights(you, friend) {
+function deriveInsights(you, friend, gapAnalysis = []) {
   const insights = []
+
+  // Mathematical topic gaps from scoring engine
+  if (Array.isArray(gapAnalysis) && gapAnalysis.length > 0) {
+    for (const g of gapAnalysis.slice(0, 3)) {
+      insights.push({
+        id: `gap-${g.tag}`,
+        type: 'gap',
+        title: `Gap in ${g.name}`,
+        detail: `${friend.displayName} has ${Math.round(g.friendMastery)}% mastery vs your ${Math.round(g.myMastery)}%. You need ~${g.problemsNeeded} more problems to match.`,
+      })
+    }
+  }
 
   // CF Rating
   if (you.cfRating !== null && friend.cfRating !== null) {
@@ -398,41 +450,24 @@ function deriveInsights(you, friend) {
     })
   }
 
-  // Topic gaps — only meaningful now that we read from snapshot_tag_stats
-  const youTopicMap    = new Map(you.topicsRaw.map(t => [t.name, t.count]))
-  const friendTopicMap = new Map(friend.topicsRaw.map(t => [t.name, t.count]))
-
-  for (const [name, fCount] of friendTopicMap) {
-    const yCount = youTopicMap.get(name) ?? 0
-    if (fCount - yCount > 15) {
-      insights.push({
-        id:   `topic-${name}`, type: 'gap',
-        title: `Gap in ${name}`,
-        detail: `${friend.displayName} has ${fCount - yCount} more solved in this topic (${fCount} vs ${yCount}).`,
-      })
-      if (insights.length >= 5) break
-    }
-  }
-
-  for (const [name, yCount] of youTopicMap) {
-    const fCount = friendTopicMap.get(name) ?? 0
-    if (yCount - fCount > 15) {
-      insights.push({
-        id:   `ahead-${name}`, type: 'ahead',
-        title: `You lead in ${name}`,
-        detail: `You've solved ${yCount - fCount} more problems in this topic (${yCount} vs ${fCount}).`,
-      })
-      if (insights.length >= 6) break
-    }
-  }
-
   return insights.slice(0, 6)
 }
 
 // ── derivePlan ────────────────────────────────────────────────────────────────
 
-function derivePlan(you, friend) {
+function derivePlan(you, friend, gapAnalysis = []) {
   const plan = []
+
+  // Concrete topic targets from mathematical gap analysis (Plan §8.6)
+  if (Array.isArray(gapAnalysis) && gapAnalysis.length > 0) {
+    for (const g of gapAnalysis.slice(0, 2)) {
+      plan.push({
+        id: `gap-plan-${g.tag}`, icon: 'topics',
+        title: `Catch up in ${g.name}`,
+        detail: `Solve ~${g.problemsNeeded} problems at your level (${Math.round(g.myMastery)}% → ${Math.round(g.friendMastery)}% mastery)`,
+      })
+    }
+  }
 
   const probGap = friend.problems - you.problems
   if (probGap > 0) {
@@ -458,22 +493,6 @@ function derivePlan(you, friend) {
       id: 'p3', icon: 'contests',
       title: `Attend ${contestGap} more contests`,
       detail: `~1 contest every 2 weeks to close the gap`,
-    })
-  }
-
-  const weakTopics = friend.topicsRaw
-    .filter(ft => {
-      const yt = you.topicsRaw.find(t => t.name === ft.name)
-      return (ft.count - (yt?.count ?? 0)) > 10
-    })
-    .slice(0, 3)
-    .map(t => t.name)
-
-  if (weakTopics.length > 0) {
-    plan.push({
-      id: 'p4', icon: 'topics',
-      title: 'Improve in key topics',
-      detail: `Focus on: ${weakTopics.join(', ')}`,
     })
   }
 

@@ -9,6 +9,7 @@ import { AuthProvider } from './auth/AuthContext'
 import { useAuth } from './auth/useAuth'
 import { getReturnTo } from './auth/returnTo'
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom'
+import { SyncProvider } from './context/SyncContext'
 import './App.css'
 
 const AuthenticatedApp = () => {
@@ -39,7 +40,9 @@ function App() {
   return (
     <AuthProvider>
       <BrowserRouter>
-        <AuthenticatedApp />
+        <SyncProvider>
+          <AuthenticatedApp />
+        </SyncProvider>
       </BrowserRouter>
     </AuthProvider>
   )

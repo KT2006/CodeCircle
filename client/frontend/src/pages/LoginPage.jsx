@@ -2,49 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth/useAuth'
 import { getReturnTo } from '../auth/returnTo'
-import logo from '../assets/logo.png'
-import fullcircle from '../assets/full_circle.png'
+import codecircleEmblem from '../assets/codecircle_emblem.jpg'
 
-// const LoginPage = () => {
-//     return (
-//       <div className="min-h-dvh w-dvw flex flex-col items-center justify-center bg-[#0A0A0F] gap-6 py-10">
-  
-//         {/* Logo + Title */}
-//         <div className="flex items-center gap-3">
-//           <img className="h-12 w-12 object-contain" src={logo} alt="logo" />
-//           <h1 className="text-5xl text-white font-semibold">CodeCircle</h1>
-//         </div>
-  
-//         {/* Circle Image */}
-//         <img className="h-72 w-72 object-contain" src={fullcircle} alt="circle" />
-  
-//         {/* Text Block */}
-//         <div className="flex flex-col items-center gap-2 text-white text-center">
-//           <h2 className="text-3xl">
-//             Welcome to <span className="font-semibold">CodeCircle</span>
-//           </h2>
-//           <p className="text-2xl font-semibold">
-//             Track Progress. Compare. Improve.
-//           </p>
-//           <p className="text-2xl">
-//             All in <span className="font-bold">ONE</span> Circle.
-//           </p>
-//         </div>
-  
-//         {/* Google Button */}
-//         <button className="flex items-center gap-4 bg-[#3C3F4A] text-white font-semibold text-xl px-16 py-3 rounded-2xl">
-//           <img className="h-8 w-8" src={google} alt="google" />
-//           Sign in With Google
-//         </button>
-  
-//         {/* Footer Text */}
-//         <p className="text-white text-sm opacity-60">
-//           By continuing, you agree to our terms of service and privacy policy
-//         </p>
-  
-//       </div>
-//     )
-//   }
 const LoginPage = () => {
   const [isGoogleReady, setIsGoogleReady] = useState(false)
   const googleButtonRef = useRef(null)
@@ -111,53 +70,193 @@ const LoginPage = () => {
   }, [googleClientId, isLoading, location, navigate, setError, signInWithGoogle])
 
   return (
-    <>
-    <div className="main flex min-h-dvh w-full flex-col items-center justify-center gap-2 overflow-x-hidden bg-black px-4 py-8">
+    <div
+      style={{
+        minHeight: '100dvh',
+        width: '100%',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: 'var(--bg)',
+        color: 'var(--text)',
+        padding: '32px 16px',
+        boxSizing: 'border-box',
+        overflowX: 'hidden',
+      }}
+    >
+      {/* Top Header: Logo with neon green background & C + Title */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 12,
+          marginBottom: 16,
+        }}
+      >
+        <div
+          style={{
+            width: 48,
+            height: 48,
+            borderRadius: 14,
+            background: 'var(--you)',
+            color: 'var(--on)',
+            display: 'grid',
+            placeItems: 'center',
+            fontWeight: 800,
+            fontSize: 26,
+            fontFamily: "'Bricolage Grotesque', 'DM Sans', sans-serif",
+            letterSpacing: '-.03em',
+            boxShadow: '0 0 24px rgba(198, 244, 50, 0.28)',
+            flexShrink: 0,
+          }}
+        >
+          C
+        </div>
+        <h1
+          style={{
+            fontFamily: "'Bricolage Grotesque', 'DM Sans', sans-serif",
+            fontSize: 'clamp(32px, 5.5vw, 54px)',
+            fontWeight: 800,
+            letterSpacing: '-.035em',
+            color: 'var(--text)',
+            margin: 0,
+            lineHeight: 1,
+          }}
+        >
+          CodeCircle
+        </h1>
+      </div>
 
-        <div className="top flex max-w-full items-center justify-center gap-1 pt-5.5">
-
-            <div className="logo-container pt-3  flex items-center" >
-            <img className='logo-img h-16 w-16 bg-cover object-cover sm:h-25 sm:w-25' src={logo} alt="" />
-            </div>
-
-            <h1 className='text-4xl font-semibold text-white sm:text-6xl' >CodeCircle</h1>
-
+      {/* Center Image + Written Content */}
+      <div
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          textAlign: 'center',
+          gap: 10,
+          marginBottom: 20,
+          width: '100%',
+          maxWidth: 560,
+        }}
+      >
+        <div style={{ display: 'grid', placeItems: 'center', margin: '4px 0 16px', position: 'relative' }}>
+          {/* Subtle neon lime glow backdrop */}
+          <div
+            style={{
+              position: 'absolute',
+              width: 220,
+              height: 220,
+              borderRadius: '50%',
+              background: 'radial-gradient(circle, rgba(198, 244, 50, 0.28) 0%, rgba(198, 244, 50, 0.08) 45%, transparent 70%)',
+              filter: 'blur(28px)',
+              pointerEvents: 'none',
+            }}
+          />
+          <img
+            src={codecircleEmblem}
+            alt="CodeCircle"
+            style={{
+              width: 'min(70vw, 240px)',
+              height: 'min(70vw, 240px)',
+              borderRadius: 36,
+              objectFit: 'cover',
+              position: 'relative',
+              boxShadow: '0 20px 48px -10px rgba(0,0,0,0.8), 0 0 32px rgba(198, 244, 50, 0.2)',
+              border: '1px solid rgba(198, 244, 50, 0.22)',
+            }}
+          />
         </div>
 
-        <div className="center text-left flex gap-1 mb-3 text-white flex-col items-center">
-            <div className="img-container ">
-                <img className='h-auto max-h-[40vh] w-[min(80vw,25rem)] object-contain sm:max-h-none' src={fullcircle} alt="" />
-            </div>
-            <h2 className='text-center text-2xl sm:text-4xl' >Welcome to <span className='font-semibold' >CodeCircle</span></h2>
-            <div className="span-class text-center text-lg font-semibold sm:text-3xl">
-            <span>Track Progress.</span> <span>Compare.</span> <span>Improve.</span>
-            </div>
-            <p className='text-xl sm:text-2xl' >All in <span className='font-bold' >ONE</span> Circle.</p>
+        <h2
+          style={{
+            fontFamily: "'Bricolage Grotesque', 'DM Sans', sans-serif",
+            fontSize: 'clamp(22px, 3.8vw, 36px)',
+            fontWeight: 400,
+            letterSpacing: '-.03em',
+            color: 'var(--text)',
+            margin: 0,
+          }}
+        >
+          Welcome to <span style={{ fontWeight: 800 }}>CodeCircle</span>
+        </h2>
+
+        <div
+          style={{
+            fontFamily: "'Bricolage Grotesque', 'DM Sans', sans-serif",
+            fontSize: 'clamp(18px, 3vw, 28px)',
+            fontWeight: 700,
+            letterSpacing: '-.025em',
+            color: 'var(--text)',
+            display: 'flex',
+            gap: '6px 10px',
+            flexWrap: 'wrap',
+            justifyContent: 'center',
+          }}
+        >
+          <span>Track Progress.</span> <span>Compare.</span> <span>Improve.</span>
         </div>
 
-        <div className="bottom mt-3 flex w-full max-w-sm flex-col items-center justify-center gap-4 text-white">
-            {isLoading || isWakingUp ? (
-              <p className="text-center text-sm text-slate-400">
-                {isWakingUp ? '⏳ Server is starting up, please wait…' : 'Loading sign-in…'}
-              </p>
-            ) : googleClientId ? (
-                <div className="flex min-h-10 w-full justify-center">
-                  {!isGoogleReady && <span className="sr-only">Loading Google sign-in…</span>}
-                  <div ref={googleButtonRef} />
-                </div>
-              )
-              : <p className="text-center text-sm text-amber-200">
-                  Google sign-in is not configured.
-                </p>
-            }
-            {error && <p role="alert" className="text-center text-sm text-rose-300">{error}</p>}
-            <p className='text-center text-sm' > By continuing, you agree to our terms of service and privacy policy </p>
-        </div>
+        <p
+          style={{
+            fontSize: 'clamp(17px, 2.4vw, 22px)',
+            color: 'var(--mute)',
+            margin: 0,
+          }}
+        >
+          All in <span style={{ fontWeight: 800, color: 'var(--text)' }}>ONE</span> Circle.
+        </p>
+      </div>
 
-        <div className="bottom-text mt-8 text-white flex items-center justify-center">
-        </div>
+      {/* Bottom Auth Section */}
+      <div
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 14,
+          width: '100%',
+          maxWidth: 360,
+        }}
+      >
+        {isLoading || isWakingUp ? (
+          <p style={{ textAlign: 'center', fontSize: 14, color: 'var(--mute)', margin: 0 }}>
+            {isWakingUp ? '⏳ Server is starting up, please wait…' : 'Loading sign-in…'}
+          </p>
+        ) : googleClientId ? (
+          <div style={{ display: 'flex', minHeight: 44, width: '100%', justifyContent: 'center' }}>
+            {!isGoogleReady && <span className="sr-only">Loading Google sign-in…</span>}
+            <div ref={googleButtonRef} />
+          </div>
+        ) : (
+          <p style={{ textAlign: 'center', fontSize: 14, color: '#f59e0b', margin: 0 }}>
+            Google sign-in is not configured.
+          </p>
+        )}
+
+        {error && (
+          <p role="alert" style={{ textAlign: 'center', fontSize: 14, color: 'var(--hot)', margin: 0 }}>
+            {error}
+          </p>
+        )}
+
+        <p
+          style={{
+            textAlign: 'center',
+            fontSize: 13,
+            color: 'var(--mute)',
+            lineHeight: 1.5,
+            margin: 0,
+            padding: '0 8px',
+          }}
+        >
+          By continuing, you agree to our terms of service and privacy policy
+        </p>
+      </div>
     </div>
-    </>
   )
 }
 

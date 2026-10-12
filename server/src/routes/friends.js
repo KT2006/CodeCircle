@@ -12,7 +12,7 @@ import { z } from 'zod'
 import requireAuth from '../middleware/requireAuth.js'
 import * as friendsRepo from '../repositories/friends.js'
 import * as platformAccountsRepo from '../repositories/platformAccounts.js'
-import { fetchPlatformProfiles } from '../services/platformProfiles.js'
+import { fetchPlatformProfiles, streamPlatformProfiles } from '../services/platformProfiles.js'
 import { saveFriendProfile } from '../repositories/profileData.js'
 import pool from '../db/pool.js'
 
@@ -253,6 +253,71 @@ router.post('/', async (req, res) => {
   })
 })
 
+// ── PUT /api/friends/:id ────────────────────────────────────────────────────
+
+router.put('/:id', async (req, res) => {
+  const friend = await friendsRepo.findByIdAndOwner(req.params.id, req.user.id)
+  if (!friend) {
+    return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Friend not found.' } })
+  }
+
+  const { displayName, handles } = req.body || {}
+
+  if (displayName && displayName.trim() && displayName.trim() !== friend.display_name) {
+    if (await friendsRepo.existsByDisplayName(req.user.id, displayName.trim())) {
+      return res.status(409).json({
+        error: { code: 'DUPLICATE', message: `You already have a friend named "${displayName.trim()}".` },
+      })
+    }
+    await friendsRepo.rename(friend.id, req.user.id, displayName.trim())
+  }
+
+  if (handles && typeof handles === 'object') {
+    const toFetch = Object.fromEntries(
+      Object.entries(handles).filter(([, v]) => v && v.trim())
+    )
+
+    let fetchedProfiles = {}
+    if (Object.keys(toFetch).length > 0) {
+      const result = await fetchPlatformProfiles(toFetch)
+      fetchedProfiles = result.profiles ?? {}
+      if (Object.keys(fetchedProfiles).length === 0) {
+        return res.status(422).json({
+          error: {
+            code: 'NO_PROFILES_FETCHED',
+            message: 'We could not fetch any platform profiles. Check the handles and try again.',
+          },
+          errors: result.errors ?? {},
+        })
+      }
+      await Promise.all(
+        Object.values(fetchedProfiles).map(p => saveFriendProfile(p))
+      )
+    }
+
+    const currentHandles = friend.handles ?? []
+    const currentPlatforms = currentHandles.map(h => h.platform)
+
+    // Remove platforms that were unlinked or cleared
+    for (const plat of currentPlatforms) {
+      if (!toFetch[plat]) {
+        await friendsRepo.removeHandle(friend.id, plat)
+      }
+    }
+
+    // Upsert linked platform accounts
+    for (const [platform, handle] of Object.entries(toFetch)) {
+      const canonical = handle.trim().toLowerCase()
+      const account = await platformAccountsRepo.findByHandle(platform, canonical)
+      if (account) {
+        await friendsRepo.upsertHandle(friend.id, platform, account.id)
+      }
+    }
+  }
+
+  res.json({ ok: true })
+})
+
 // ── DELETE /api/friends/:id ───────────────────────────────────────────────────
 
 router.delete('/:id', async (req, res) => {
@@ -261,6 +326,89 @@ router.delete('/:id', async (req, res) => {
     return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Friend not found.' } })
   }
   res.json({ ok: true })
+})
+
+// ── POST /api/friends/:id/sync-stream ─────────────────────────────────────────
+
+router.post('/:id/sync-stream', async (req, res) => {
+  const friend = await friendsRepo.findByIdAndOwner(req.params.id, req.user.id)
+  if (!friend) {
+    return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Friend not found.' } })
+  }
+
+  const { displayName, handles } = req.body || {}
+
+  if (displayName && displayName.trim() && displayName.trim() !== friend.display_name) {
+    if (await friendsRepo.existsByDisplayName(req.user.id, displayName.trim())) {
+      return res.status(409).json({
+        error: { code: 'DUPLICATE', message: `You already have a friend named "${displayName.trim()}".` },
+      })
+    }
+    await friendsRepo.rename(friend.id, req.user.id, displayName.trim())
+  }
+
+  const toFetch = Object.fromEntries(
+    Object.entries(handles || {}).filter(([, v]) => v && v.trim())
+  )
+
+  // Configure SSE response headers
+  res.setHeader('Content-Type', 'text/event-stream')
+  res.setHeader('Cache-Control', 'no-cache, no-transform')
+  res.setHeader('Connection', 'keep-alive')
+  res.setHeader('X-Accel-Buffering', 'no')
+  res.flushHeaders?.()
+
+  const sendEvent = (event, data) => {
+    res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`)
+  }
+
+  // Remove platforms that were unlinked
+  const currentHandles = friend.handles ?? []
+  for (const h of currentHandles) {
+    if (!toFetch[h.platform]) {
+      await friendsRepo.removeHandle(friend.id, h.platform)
+    }
+  }
+
+  if (Object.keys(toFetch).length === 0) {
+    sendEvent('complete', { total: 0, succeeded: 0, failed: 0, errors: {} })
+    return res.end()
+  }
+
+  try {
+    await streamPlatformProfiles(toFetch, {
+      onStart: (info) => {
+        sendEvent('start', info)
+      },
+      onProgress: async (event) => {
+        if (event.type === 'platform_success' && event.profile) {
+          try {
+            await saveFriendProfile(event.profile)
+            const canonical = event.profile.username.trim().toLowerCase()
+            const account = await platformAccountsRepo.findByHandle(event.platform, canonical)
+            if (account) {
+              await friendsRepo.upsertHandle(friend.id, event.platform, account.id)
+            }
+          } catch (dbErr) {
+            console.error('Failed to save friend profile snapshot:', dbErr)
+          }
+        }
+        sendEvent(event.type, event)
+      },
+      onComplete: (results) => {
+        sendEvent('complete', {
+          total: Object.keys(toFetch).length,
+          succeeded: Object.keys(results.profiles).length,
+          failed: Object.keys(results.errors).length,
+          errors: results.errors,
+        })
+        res.end()
+      },
+    })
+  } catch (err) {
+    sendEvent('error', { message: err.message })
+    res.end()
+  }
 })
 
 // ── GET /api/friends/:id ──────────────────────────────────────────────────────

@@ -8,6 +8,7 @@
     "dev": "nodemon src/server.js",
     "start": "node src/server.js",
     "lint": "eslint src/",
+    "test": "node --test test/**/*.test.js",
     "migrate": "node-pg-migrate --migrations-dir src/db/migrations",
     "migrate:up": "node-pg-migrate up --migrations-dir src/db/migrations",
     "migrate:down": "node-pg-migrate down --migrations-dir src/db/migrations",

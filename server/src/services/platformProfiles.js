@@ -87,11 +87,23 @@ const PLATFORM_FETCHERS = {
   geeksforgeeks: fetchGeeksForGeeksProfile,
 }
 
+const withTimeout = (promise, ms = 15000, platformName = 'platform') =>
+  Promise.race([
+    promise,
+    new Promise((_, reject) =>
+      setTimeout(() => {
+        const err = new Error(`${platformName} request timed out after ${ms / 1000}s`)
+        err.code = 'TIMEOUT'
+        reject(err)
+      }, ms),
+    ),
+  ])
+
 /**
  * Fetch all supplied platform profiles independently so one upstream failure
  * does not discard successful data from another platform.
  *
- * @param {{ leetcode?: string, codeforces?: string, codechef?: string, atcoder?: string }} handles
+ * @param {{ leetcode?: string, codeforces?: string, codechef?: string, atcoder?: string, geeksforgeeks?: string }} handles
  * @returns {Promise<{ profiles: Record<string, object>, errors: Record<string, { code: string, message: string }> }>}
  */
 export async function fetchPlatformProfiles(handles) {
@@ -99,7 +111,7 @@ export async function fetchPlatformProfiles(handles) {
   const results = await Promise.allSettled(
     requests.map(async ([platform, handle]) => [
       platform,
-      await PLATFORM_FETCHERS[platform](handle),
+      await withTimeout(PLATFORM_FETCHERS[platform](handle), 15000, platform),
     ]),
   )
   const profiles = {}
@@ -120,3 +132,70 @@ export async function fetchPlatformProfiles(handles) {
 
   return { profiles, errors }
 }
+
+/**
+ * Stream platform profile fetching with live callbacks per platform.
+ *
+ * @param {Record<string, string>} handles
+ * @param {{
+ *   onStart?: (info: { total: number, platforms: string[] }) => void,
+ *   onProgress?: (event: { type: 'platform_success' | 'platform_error', platform: string, profile?: object, error?: object, completed: number, total: number }) => void | Promise<void>,
+ *   onComplete?: (results: { profiles: Record<string, object>, errors: Record<string, object> }) => void | Promise<void>
+ * }} callbacks
+ */
+export async function streamPlatformProfiles(handles, { onStart, onProgress, onComplete } = {}) {
+  const requests = Object.entries(handles).filter(([, handle]) => Boolean(handle))
+  const total = requests.length
+
+  if (onStart) {
+    onStart({ total, platforms: requests.map(([p]) => p) })
+  }
+
+  const profiles = {}
+  const errors = {}
+  let completed = 0
+
+  await Promise.allSettled(
+    requests.map(async ([platform, handle]) => {
+      try {
+        const fetcher = PLATFORM_FETCHERS[platform]
+        if (!fetcher) throw new Error(`Unsupported platform: ${platform}`)
+        const profile = await withTimeout(fetcher(handle), 15000, platform)
+        profiles[platform] = profile
+        completed += 1
+        if (onProgress) {
+          await onProgress({
+            type: 'platform_success',
+            platform,
+            profile,
+            completed,
+            total,
+          })
+        }
+      } catch (err) {
+        const error = {
+          code: err?.code ?? 'UPSTREAM_ERROR',
+          message: err instanceof Error ? err.message : 'Unable to fetch profile',
+        }
+        errors[platform] = error
+        completed += 1
+        if (onProgress) {
+          await onProgress({
+            type: 'platform_error',
+            platform,
+            error,
+            completed,
+            total,
+          })
+        }
+      }
+    })
+  )
+
+  const finalResults = { profiles, errors }
+  if (onComplete) {
+    await onComplete(finalResults)
+  }
+  return finalResults
+}
+

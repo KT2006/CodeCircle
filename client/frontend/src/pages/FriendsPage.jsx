@@ -1,101 +1,76 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Plus, RefreshCw, Search, SlidersHorizontal, ChevronDown, Users } from 'lucide-react'
-import FriendStatCard from '../components/friends/FriendStatCard'
-import RecentActivity from '../components/friends/RecentActivity'
-import FriendCard     from '../components/friends/FriendCard'
+import { useAuth } from '../auth/useAuth'
 import AddFriendModal from '../components/friends/AddFriendModal'
 
-// ── Constants ──────────────────────────────────────────────────────────────────
+const PALETTE = ['#3DA66A', '#E58A2B', '#3B6FE0', '#9B51E0', '#E05252', '#0284C7', '#16A34A', '#D97706']
 
-const SORT_OPTIONS = [
-  { value: 'recently_active', label: 'Recently Active' },
-  { value: 'streak',          label: 'Streak'          },
-  { value: 'name',            label: 'Name'             },
-  { value: 'problems_solved', label: 'Problems Solved'  },
-]
-
-const STATUS_ORDER = { active_now: 0, active_recent: 1, active_today: 2, inactive: 3 }
-
-// ── Helpers ────────────────────────────────────────────────────────────────────
-
-const filterFriends = (friends, tab, query) => {
-  let result = friends
-  if (tab === 'active') {
-    result = result.filter(f =>
-      ['active_now', 'active_recent', 'active_today'].includes(f.status)
-    )
-  }
-  if (query.trim()) {
-    const q = query.toLowerCase()
-    result = result.filter(
-      f =>
-        f.displayName.toLowerCase().includes(q) ||
-        (f.handle ?? '').toLowerCase().includes(q)
-    )
-  }
-  return result
+const getAvatarColor = (friend) => {
+  if (friend?.avatarColor) return friend.avatarColor
+  const sum = (friend?.displayName || '').split('').reduce((a, c) => a + c.charCodeAt(0), 0)
+  return PALETTE[sum % PALETTE.length]
 }
 
-const sortFriends = (friends, sortBy) => {
-  const copy = [...friends]
-  if (sortBy === 'name') return copy.sort((a, b) => a.displayName.localeCompare(b.displayName))
-  if (sortBy === 'streak') return copy.sort((a, b) => (b.streak ?? 0) - (a.streak ?? 0))
-  if (sortBy === 'problems_solved') {
-    return copy.sort((a, b) => (b.totalSolved ?? 0) - (a.totalSolved ?? 0))
+const getDaysAgo = (friend) => {
+  if (['active_now', 'active_recent', 'active_today'].includes(friend?.status)) return 0
+  if (friend?.lastSyncedAt) {
+    const diffMs = Date.now() - new Date(friend.lastSyncedAt).getTime()
+    return Math.max(0, Math.floor(diffMs / (1000 * 60 * 60 * 24)))
   }
-  return copy.sort((a, b) =>
-    (STATUS_ORDER[a.status] ?? 3) - (STATUS_ORDER[b.status] ?? 3)
-  )
+  return 99
 }
 
-/** Build recent-activity items from the friends list */
-const buildRecentActivity = (friends) => {
-  const items = []
-  for (const f of friends) {
-    if (f.lastActivity) {
-      items.push({
-        id:             `${f.id}-activity`,
-        friendInitials: f.initials,
-        friendColor:    f.avatarColor,
-        text:           f.lastActivity.text,
-        platform:       f.lastActivity.platform,
-        timeAgo:        f.lastActivity.timeAgo,
-        badge:          null,
-        badgeIcon:      f.lastActivity.platform,
-      })
-    }
-  }
-  return items.slice(0, 6)
+const formatAgo = (d) => {
+  if (d === 0) return 'today'
+  if (d === 1) return '1 day ago'
+  return `${d} days ago`
 }
-
-// ── FriendsPage ────────────────────────────────────────────────────────────────
 
 const FriendsPage = () => {
   const navigate = useNavigate()
+  const { user } = useAuth()
 
-  // ── data state ──
-  const [friends,    setFriends]    = useState([])
-  const [loading,    setLoading]    = useState(true)
-  const [loadError,  setLoadError]  = useState(null)
-  const [removing,   setRemoving]   = useState(null) // friend id being removed
+  // ── Data State ──
+  const [friends, setFriends] = useState([])
+  const [userStats, setUserStats] = useState({ solved: 0, streak: 0 })
+  const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState(null)
 
-  // ── UI state ──
-  const [activeTab,    setActiveTab]    = useState('all')
-  const [searchQuery,  setSearchQuery]  = useState('')
-  const [sortBy,       setSortBy]       = useState('recently_active')
-  const [sortOpen,     setSortOpen]     = useState(false)
-  const [modalOpen,    setModalOpen]    = useState(false)
+  // ── UI Filter & Sort State ──
+  const [activeTab, setActiveTab] = useState('all') // 'all' | 'today'
+  const [searchQuery, setSearchQuery] = useState('')
+  const [sortBy, setSortBy] = useState('rec') // 'rec' | 'solved' | 'streak'
+  const [viewAllActivity, setViewAllActivity] = useState(false)
+  const [modalOpen, setModalOpen] = useState(false)
 
-  // ── Fetch friends list ──
-  const loadFriends = useCallback(async () => {
+  // ── Load Friends & User Profile ──
+  const loadData = useCallback(async () => {
     setLoading(true)
     setLoadError(null)
     try {
-      const res  = await fetch('/api/friends', { credentials: 'include' })
+      // 1. Load friends
+      const res = await fetch('/api/friends', { credentials: 'include' })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error?.message ?? `HTTP ${res.status}`)
       setFriends(data.friends ?? [])
+
+      // 2. Load user profile for leaderboard
+      try {
+        const pRes = await fetch('/api/profile', { credentials: 'include' })
+        if (pRes.ok) {
+          const pData = await pRes.json()
+          const profiles = pData.profiles || {}
+          let s = 0
+          let st = 0
+          for (const p of Object.values(profiles)) {
+            s += p.problemsSolved ?? 0
+            if ((p.streak ?? 0) > st) st = p.streak
+          }
+          setUserStats({ solved: s, streak: st })
+        }
+      } catch {
+        // Fallback gracefully
+      }
     } catch (err) {
       setLoadError(err.message)
     } finally {
@@ -105,29 +80,48 @@ const FriendsPage = () => {
 
   useEffect(() => {
     let cancelled = false
-    const doLoad = async () => {
+    const init = async () => {
       setLoading(true)
       setLoadError(null)
       try {
-        const res  = await fetch('/api/friends', { credentials: 'include' })
+        const res = await fetch('/api/friends', { credentials: 'include' })
         const data = await res.json()
         if (!res.ok) throw new Error(data.error?.message ?? `HTTP ${res.status}`)
         if (!cancelled) setFriends(data.friends ?? [])
+
+        try {
+          const pRes = await fetch('/api/profile', { credentials: 'include' })
+          if (pRes.ok) {
+            const pData = await pRes.json()
+            if (!cancelled) {
+              const profiles = pData.profiles || {}
+              let s = 0
+              let st = 0
+              for (const p of Object.values(profiles)) {
+                s += p.problemsSolved ?? 0
+                if ((p.streak ?? 0) > st) st = p.streak
+              }
+              setUserStats({ solved: s, streak: st })
+            }
+          }
+        } catch {
+          // fallback
+        }
       } catch (err) {
         if (!cancelled) setLoadError(err.message)
       } finally {
         if (!cancelled) setLoading(false)
       }
     }
-    doLoad()
+    init()
     return () => { cancelled = true }
   }, [])
 
-  // ── Add friend (called from modal) ──
-  const handleAddFriend = async (payload, { onError, onSuccess }) => {
+  // ── Modal Add Friend ──
+  const handleModalAdd = async (payload, { onError, onSuccess }) => {
     try {
-      const res  = await fetch('/api/friends', {
-        method:  'POST',
+      const res = await fetch('/api/friends', {
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify(payload),
@@ -137,260 +131,434 @@ const FriendsPage = () => {
         onError(data.error?.message ?? `HTTP ${res.status}`)
         return
       }
-      // Prepend new friend to list
-      if (data.friend) setFriends(prev => [data.friend, ...prev])
+      if (data.friend) {
+        setFriends(prev => [data.friend, ...prev])
+      } else {
+        await loadData()
+      }
       onSuccess()
     } catch (err) {
       onError(err.message)
     }
   }
 
-  // ── Remove friend ──
-  const handleRemoveFriend = async (friendId, e) => {
-    e?.stopPropagation()
-    if (removing) return
-    setRemoving(friendId)
-    try {
-      const res = await fetch(`/api/friends/${friendId}`, {
-        method: 'DELETE',
-        credentials: 'include',
-      })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error?.message ?? `HTTP ${res.status}`)
-      if (res.ok) {
-        setFriends(prev => prev.filter(f => f.id !== friendId))
-      }
-    } catch (err) {
-      setLoadError(err.message)
-    } finally {
-      setRemoving(null)
+  // ── Derived Statistics ──
+  const friendsWithDays = useMemo(() => {
+    return friends.map(f => ({
+      ...f,
+      daysAgo: getDaysAgo(f),
+      color: getAvatarColor(f),
+      ini: f.initials || (f.displayName || '?')[0].toUpperCase(),
+    }))
+  }, [friends])
+
+  const liveFriends = useMemo(() => {
+    return friendsWithDays.filter(f => f.daysAgo === 0)
+  }, [friendsWithDays])
+
+  const liveCount = liveFriends.length
+  const totalSolved = useMemo(() => friends.reduce((acc, f) => acc + (f.totalSolved || 0), 0), [friends])
+  const totalStreak = useMemo(() => friends.reduce((acc, f) => acc + (f.streak || 0), 0), [friends])
+
+  const topActiveFriend = useMemo(() => {
+    if (friendsWithDays.length === 0) return null
+    return [...friendsWithDays].sort((a, b) => a.daysAgo - b.daysAgo)[0]
+  }, [friendsWithDays])
+
+  const subtitle = useMemo(() => {
+    if (liveCount > 0) {
+      return `${liveCount} of your ${liveCount === 1 ? 'friend has' : 'friends have'} already solved today.`
     }
-  }
+    if (topActiveFriend) {
+      return `${topActiveFriend.displayName} was last active ${formatAgo(topActiveFriend.daysAgo)}. Solve one problem today and you are first on the board.`
+    }
+    return 'Add friends to track progress, compete on the board, and keep your streak going together.'
+  }, [liveCount, topActiveFriend])
 
-  // ── Derived ──
-  const activeCount = friends.filter(
-    f => ['active_now', 'active_recent', 'active_today'].includes(f.status)
-  ).length
+  // ── Filtered & Sorted Friends Grid ──
+  const displayedFriends = useMemo(() => {
+    const q = searchQuery.toLowerCase().trim()
+    const list = friendsWithDays.filter(f => {
+      const matchesTab = activeTab === 'all' || f.daysAgo === 0
+      const matchesSearch = !q || (f.displayName + ' ' + (f.handle || '')).toLowerCase().includes(q)
+      return matchesTab && matchesSearch
+    })
 
-  const displayedFriends = sortFriends(
-    filterFriends(friends, activeTab, searchQuery),
-    sortBy
-  )
+    return [...list].sort((a, b) => {
+      if (sortBy === 'solved') {
+        const diff = (b.totalSolved ?? 0) - (a.totalSolved ?? 0)
+        if (diff !== 0) return diff
+        return (b.streak ?? 0) - (a.streak ?? 0)
+      }
+      if (sortBy === 'streak') {
+        const diff = (b.streak ?? 0) - (a.streak ?? 0)
+        if (diff !== 0) return diff
+        return (b.totalSolved ?? 0) - (a.totalSolved ?? 0)
+      }
+      if (sortBy === 'name') {
+        return (a.displayName || '').localeCompare(b.displayName || '')
+      }
 
-  const recentActivity   = buildRecentActivity(friends)
-  const totalSolvedToday = friends.reduce((s, f) => s + (f.totalSolved ?? 0), 0)
+      // Default: 'rec' (Recently active)
+      // 1. Online status priority: active_now (0) > active_recent (1) > active_today (2) > inactive (3)
+      const STATUS_ORDER = { active_now: 0, active_recent: 1, active_today: 2, inactive: 3 }
+      const statusA = STATUS_ORDER[a.status] ?? 3
+      const statusB = STATUS_ORDER[b.status] ?? 3
+      if (statusA !== statusB) return statusA - statusB
 
-  const currentSortLabel = SORT_OPTIONS.find(o => o.value === sortBy)?.label ?? 'Sort'
+      // 2. Exact timestamp of sync/activity (latest first)
+      const timeA = a.lastSyncedAt ? new Date(a.lastSyncedAt).getTime() : 0
+      const timeB = b.lastSyncedAt ? new Date(b.lastSyncedAt).getTime() : 0
+      if (timeA !== timeB) return timeB - timeA
 
-  const FILTER_TABS = [
-    { key: 'all',    label: `All Friends (${friends.length})` },
-    { key: 'active', label: `Active Today (${activeCount})`   },
-  ]
+      // 3. Days ago (lower days first)
+      if (a.daysAgo !== b.daysAgo) return a.daysAgo - b.daysAgo
 
-  // ── Render ──────────────────────────────────────────────────────────────────
+      // 4. Total solved
+      return (b.totalSolved ?? 0) - (a.totalSolved ?? 0)
+    })
+  }, [friendsWithDays, activeTab, searchQuery, sortBy])
+
+  // ── Leaderboard Data (User + Friends) ──
+  const leaderboard = useMemo(() => {
+    const userName = user?.name || 'You'
+    const userInitial = (user?.name || 'K')[0].toUpperCase()
+    const userEntry = {
+      id: 'self',
+      n: userName,
+      ini: userInitial,
+      col: 'var(--you)',
+      s: userStats.solved,
+      st: userStats.streak,
+      you: true,
+    }
+    const friendEntries = friendsWithDays.map(f => ({
+      id: f.id,
+      n: f.displayName,
+      ini: f.ini,
+      col: f.color,
+      s: f.totalSolved || 0,
+      st: f.streak || 0,
+      you: false,
+    }))
+    return [userEntry, ...friendEntries].sort((a, b) => b.s - a.s)
+  }, [user, userStats, friendsWithDays])
+
+  // ── Recent Activity ──
+  const allActivities = useMemo(() => {
+    const acts = []
+    for (const f of friendsWithDays) {
+      if (f.lastActivity) {
+        acts.push({
+          id: `${f.id}-act`,
+          n: f.displayName,
+          ini: f.ini,
+          col: f.color,
+          text: f.lastActivity.text,
+          t: f.lastActivity.timeAgo,
+          daysAgo: f.daysAgo,
+        })
+      } else if (f.totalSolved > 0) {
+        acts.push({
+          id: `${f.id}-act-gen`,
+          n: f.displayName,
+          ini: f.ini,
+          col: f.color,
+          text: `${f.totalSolved} problems solved`,
+          t: f.lastSeenLabel || formatAgo(f.daysAgo),
+          daysAgo: f.daysAgo,
+        })
+      }
+    }
+    return acts.sort((a, b) => a.daysAgo - b.daysAgo)
+  }, [friendsWithDays])
+
+  const displayedActivities = viewAllActivity ? allActivities : allActivities.slice(0, 4)
 
   return (
     <>
-      <div className="space-y-5">
-
-        {/* ── Page header ── */}
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold text-white">Friends</h1>
-            <p className="mt-1 text-sm text-slate-400">
-              See what your friends are solving, competing and learning.
-            </p>
-          </div>
-          <div className="flex shrink-0 items-center gap-2">
-            <button
-              type="button"
-              onClick={loadFriends}
-              disabled={loading}
-              className="flex items-center gap-2 rounded-xl border border-white/10 px-3 py-2.5 text-sm text-slate-300 transition-colors hover:bg-white/5 hover:text-white disabled:opacity-50"
-              aria-label="Refresh"
-            >
-              <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-            </button>
-            <button
-              type="button"
-              onClick={() => setModalOpen(true)}
-              className="flex items-center gap-2 rounded-xl bg-violet-600 px-4 py-2.5 text-sm font-semibold text-white shadow-[0_0_24px_rgba(124,58,237,0.30)] transition-colors hover:bg-violet-500"
-            >
-              <Plus className="h-4 w-4" />
-              Add Friend
-            </button>
-          </div>
-        </div>
-
-        {/* ── Error banner ── */}
+      <div className="cc-friends">
+        {/* ── Error Banner ── */}
         {loadError && (
-          <div className="rounded-xl bg-rose-500/10 px-4 py-3 text-sm text-rose-300">
+          <div
+            style={{
+              padding: '12px 18px',
+              borderRadius: 16,
+              background: 'rgba(255, 107, 107, 0.12)',
+              border: '1px solid rgba(255, 107, 107, 0.25)',
+              color: '#ff6b6b',
+              fontSize: 14,
+            }}
+          >
             {loadError}
           </div>
         )}
 
-        {/* ── Stat cards row ── */}
-        <div className="flex flex-col gap-3 sm:flex-row">
-          <FriendStatCard
-            icon="friends"
-            value={friends.length}
-            label="Total friends"
-            subtitle={`${activeCount} active today`}
-          />
-          <FriendStatCard
-            icon="problems"
-            value={totalSolvedToday}
-            label="Combined problems solved"
-            subtitle="across all friends"
-          />
-          <FriendStatCard
-            icon="contests"
-            value={friends.reduce((s, f) => s + (f.streak ?? 0), 0)}
-            label="Total streak days"
-            subtitle="combined streaks"
-          />
-          <FriendStatCard
-            icon="rating"
-            value={activeCount}
-            label="Friends active today"
-            subtitle={`out of ${friends.length} friends`}
-          />
-        </div>
+        {/* ── Hero Section ── */}
+        <section className="c">
+          <span className="m">Your circle</span>
+          <h1>
+            {friends.length} {friends.length === 1 ? 'friend' : 'friends'}, {liveCount} solving today.
+          </h1>
+          <p className="m" style={{ margin: 0 }}>
+            {subtitle}
+          </p>
+        </section>
 
-        {/* ── Filter tabs + search/sort bar ── */}
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          {/* Filter tabs */}
-          <div className="flex gap-1.5 overflow-x-auto pb-0.5">
-            {FILTER_TABS.map(({ key, label }) => (
-              <button
-                key={key}
-                type="button"
-                onClick={() => setActiveTab(key)}
-                className={`shrink-0 rounded-xl border px-4 py-2 text-sm font-medium transition-colors ${
-                  activeTab === key
-                    ? 'border-violet-500/30 bg-violet-500/15 text-violet-200'
-                    : 'border-white/10 bg-white/4 text-slate-400 hover:border-white/20 hover:text-slate-200'
-                }`}
-              >
-                {label}
-              </button>
-            ))}
+        {/* ── Numbers Summary Row ── */}
+        <section className="nums">
+          <div className="c">
+            <div className="d mono">{friends.length}</div>
+            <small>friends</small>
           </div>
+          <div className="c">
+            <div className="d mono">{totalSolved}</div>
+            <small>problems solved together</small>
+          </div>
+          <div className="c">
+            <div className="d mono">{totalStreak}</div>
+            <small>combined streak days</small>
+          </div>
+          <div className="c">
+            <div className="d mono">{liveCount}</div>
+            <small>solving today</small>
+          </div>
+        </section>
 
-          {/* Search + sort */}
-          <div className="flex items-center gap-2">
-            <div className="relative">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search friends..."
-                className="w-44 rounded-xl border border-white/10 bg-white/5 py-2 pl-9 pr-3 text-sm text-white placeholder-slate-500 outline-none transition-colors focus:border-violet-500/60 sm:w-52"
-              />
-            </div>
+        {/* ── Filter & Search Bar ── */}
+        <div className="bar">
+          <button
+            type="button"
+            className={activeTab === 'all' ? 'on' : ''}
+            onClick={() => setActiveTab('all')}
+          >
+            All friends ({friends.length})
+          </button>
+          <button
+            type="button"
+            className={activeTab === 'today' ? 'on' : ''}
+            onClick={() => setActiveTab('today')}
+          >
+            Active today ({liveCount})
+          </button>
 
-            {/* Sort dropdown */}
-            <div className="relative">
-              <button
-                type="button"
-                onClick={() => setSortOpen(o => !o)}
-                className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-slate-300 transition-colors hover:bg-white/8 hover:text-white"
-              >
-                <span className="hidden font-medium text-white sm:inline">{currentSortLabel}</span>
-                <ChevronDown className={`h-3.5 w-3.5 transition-transform ${sortOpen ? 'rotate-180' : ''}`} />
-              </button>
-              {sortOpen && (
-                <div className="absolute right-0 top-full z-20 mt-1.5 min-w-[180px] overflow-hidden rounded-xl border border-white/10 bg-[#0e1527] shadow-[0_16px_40px_rgba(0,0,0,0.5)]">
-                  {SORT_OPTIONS.map(({ value, label }) => (
-                    <button
-                      key={value}
-                      type="button"
-                      onClick={() => { setSortBy(value); setSortOpen(false) }}
-                      className={`flex w-full px-4 py-2.5 text-sm transition-colors hover:bg-white/6 ${
-                        sortBy === value ? 'text-violet-300' : 'text-slate-300'
-                      }`}
-                    >
-                      {label}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-
+          <div className="sp">
+            <input
+              type="search"
+              placeholder="Search friends"
+              aria-label="Search friends"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value)}
+              aria-label="Sort friends"
+              className="cc-sort-select"
+            >
+              <option value="rec">Recently active</option>
+              <option value="solved">Most solved</option>
+              <option value="streak">Longest streak</option>
+              <option value="name">Name (A-Z)</option>
+            </select>
             <button
               type="button"
-              className="rounded-xl border border-white/10 bg-white/5 p-2 text-slate-400 transition-colors hover:bg-white/8 hover:text-white"
-              aria-label="More filters"
+              className="p"
+              onClick={() => setModalOpen(true)}
             >
-              <SlidersHorizontal className="h-4 w-4" />
+              Add friend
             </button>
           </div>
         </div>
 
-        {/* ── Recent Activity ── */}
-        {recentActivity.length > 0 && (
-          <RecentActivity activities={recentActivity} onViewAll={() => {}} />
-        )}
+        {/* ── Leaderboard Card (#lb) ── */}
+        <section className="c">
+          <div className="hd">
+            <h2>Leaderboard</h2>
+            <span className="m" style={{ fontSize: 13 }}>By problems solved</span>
+          </div>
 
-        {/* ── Loading skeleton ── */}
-        {loading && friends.length === 0 && (
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-            {[1, 2, 3, 4].map(i => (
-              <div
-                key={i}
-                className="h-40 animate-pulse rounded-2xl border border-white/8 bg-white/3"
-              />
+          <div>
+            {leaderboard.map((item, index) => (
+              <div className="lbrow" key={item.id}>
+                <span className="lbrank mono">{index + 1}</span>
+                <span
+                  className="lbav"
+                  style={{
+                    background: item.col,
+                    color: item.you ? 'var(--on)' : '#fff',
+                  }}
+                >
+                  {item.ini}
+                </span>
+                <span className="lbname">
+                  {item.you ? (
+                    <>
+                      <b>{item.n}</b>
+                      <span className="you-tag">you</span>
+                    </>
+                  ) : (
+                    item.n
+                  )}
+                </span>
+                <span className="lbst mono m">{item.st}d streak</span>
+                <span className="lbscore mono">{item.s}</span>
+              </div>
             ))}
           </div>
-        )}
 
-        {/* ── Friend cards grid ── */}
-        {!loading && displayedFriends.length > 0 && (
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-            {displayedFriends.map(friend => (
-              <FriendCard
-                key={friend.id}
-                friend={friend}
-                removing={removing === friend.id}
-                onClick={() => navigate(`/friends/${friend.id}`)}
-                onRemove={(e) => handleRemoveFriend(friend.id, e)}
-              />
-            ))}
-          </div>
-        )}
-
-        {/* ── Empty state ── */}
-        {!loading && displayedFriends.length === 0 && (
-          <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-white/8 bg-white/3 py-16 text-center">
-            <Users className="h-10 w-10 text-slate-600" />
-            <p className="text-base font-medium text-slate-300">
-              {searchQuery ? 'No friends found' : 'No friends yet'}
-            </p>
-            <p className="text-sm text-slate-500">
-              {searchQuery
-                ? 'Try a different search term.'
-                : 'Add a friend to start tracking their progress.'}
-            </p>
-            {!searchQuery && (
+          {friends.length <= 1 && (
+            <div className="dash" style={{ marginTop: 14 }}>
+              <b>{friends.length === 0 ? 'Nobody else on the board yet' : 'Only two of you so far'}</b>
+              <div className="m" style={{ margin: '4px 0 12px' }}>
+                Add friends to see everyone on one board.
+              </div>
               <button
                 type="button"
+                className="p"
                 onClick={() => setModalOpen(true)}
-                className="mt-2 flex items-center gap-2 rounded-xl bg-violet-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-violet-500"
               >
-                <Plus className="h-4 w-4" />
-                Add Friend
+                Add a friend
+              </button>
+            </div>
+          )}
+        </section>
+
+        {/* ── Recent Activity Card (#ra) ── */}
+        <section className="c">
+          <div className="hd">
+            <h2>Recent activity</h2>
+            {allActivities.length > 4 && (
+              <button type="button" onClick={() => setViewAllActivity(v => !v)}>
+                {viewAllActivity ? 'Show less' : 'View all'}
               </button>
             )}
           </div>
-        )}
+
+          <div>
+            {displayedActivities.length > 0 ? (
+              displayedActivities.map((act) => (
+                <div className="act" key={act.id}>
+                  <div className="av" style={{ '--c': act.col }}>
+                    {act.ini}
+                  </div>
+                  <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    <b>{act.n}</b> <span className="m">· {act.text}</span>
+                  </span>
+                  <span className="t">{act.t}</span>
+                </div>
+              ))
+            ) : (
+              <div className="m" style={{ padding: '12px 0', fontSize: 14 }}>
+                No recent activity yet. When friends solve problems, they'll appear here.
+              </div>
+            )}
+          </div>
+        </section>
+
+        {/* ── Friends Cards Grid (#gr) ── */}
+        <section className="grid">
+          {displayedFriends.map((f) => {
+            const isLive = f.daysAgo === 0
+            const lastText = f.lastActivity?.text || (f.platforms ? Object.keys(f.platforms).length + ' platforms linked' : 'No submissions yet')
+            const lastTime = f.lastActivity?.timeAgo || f.lastSeenLabel || 'recently'
+
+            return (
+              <article className="c fc" key={f.id}>
+                <div className="top">
+                  <div className="av" style={{ '--c': f.color }}>
+                    {f.ini}
+                  </div>
+                  <div style={{ minWidth: 0, overflow: 'hidden' }}>
+                    <div
+                      className="n"
+                      style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                    >
+                      {f.displayName}
+                    </div>
+                    <div
+                      className="m"
+                      style={{ fontSize: 14, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                    >
+                      {f.handle || 'No handle'}
+                    </div>
+                  </div>
+                  <span className="streak mono">{f.streak ?? 0}d</span>
+                </div>
+
+                <div>
+                  <div className="big mono">{f.totalSolved ?? 0}</div>
+                  <span className="m">problems solved</span>
+                </div>
+
+                <div className="m" style={{ fontSize: 14 }}>
+                  <span className={`dot ${isLive ? 'live' : ''}`} />
+                  {isLive ? 'Active today' : `Active ${lastTime}`}
+                </div>
+
+                <div className="last">
+                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginRight: 8 }}>
+                    {lastText}
+                  </span>
+                  <span style={{ whiteSpace: 'nowrap', flexShrink: 0 }}>
+                    {lastTime}
+                  </span>
+                </div>
+
+                <div className="btns">
+                  <button
+                    type="button"
+                    className="p"
+                    onClick={() => navigate(`/compare?friend=${f.id}`)}
+                  >
+                    Compare
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => navigate(`/friends/${f.id}`)}
+                  >
+                    View profile
+                  </button>
+                </div>
+              </article>
+            )
+          })}
+
+          {/* Dash Card when in 'all' tab & no search */}
+          {activeTab === 'all' && !searchQuery.trim() && (
+            <div className="dash">
+              <b>Know someone who codes?</b>
+              <span className="m">Friends make the streak easier to keep.</span>
+              <button
+                type="button"
+                className="p"
+                onClick={() => setModalOpen(true)}
+              >
+                Add friend
+              </button>
+            </div>
+          )}
+
+          {/* Empty State */}
+          {displayedFriends.length === 0 && (
+            <div className="empty">
+              {loading
+                ? 'Loading circle…'
+                : activeTab === 'today'
+                ? 'Nobody has solved yet today. Be the first.'
+                : searchQuery
+                ? 'No friends match that search.'
+                : 'No friends in your circle yet. Add friends above to start.'}
+            </div>
+          )}
+        </section>
       </div>
 
-      {/* ── Add Friend Modal ── */}
+      {/* ── Multi-Platform Add Friend Modal ── */}
       <AddFriendModal
         open={modalOpen}
         onClose={() => setModalOpen(false)}
-        onSubmit={handleAddFriend}
+        onSubmit={handleModalAdd}
       />
     </>
   )
