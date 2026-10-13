@@ -49,7 +49,7 @@ router.get('/:username', async (req, res) => {
     // User exists but hasn't connected any platforms yet
     return res.json({
       username: user.username,
-      displayName: user.name,
+      displayName: user.username,
       avatarUrl: user.avatar_url ?? null,
       joinedAt: user.created_at,
       platforms: [],
@@ -197,7 +197,7 @@ router.get('/:username', async (req, res) => {
 
   return res.json({
     username: user.username,
-    displayName: user.name,
+    displayName: user.username,
     avatarUrl: user.avatar_url ?? null,
     joinedAt: user.created_at,
     platforms: platformPayload,
