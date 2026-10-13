@@ -97,7 +97,7 @@ const ProfilePage = () => {
   // ── Derived ──
   const connectedProfiles = useMemo(() => Object.entries(profiles).filter(([,p]) => p).map(([platform,p]) => ({ ...p, platform })), [profiles])
   const hasData = connectedProfiles.length > 0
-  const displayName   = user?.name?.split(' ')[0] ?? connectedProfiles[0]?.username ?? 'You'
+  const displayName   = user?.username ?? user?.name?.split(' ')[0] ?? connectedProfiles[0]?.username ?? 'You'
   const totalSolved   = hasData ? connectedProfiles.reduce((s,p) => s + (p.problemsSolved ?? 0), 0) : null
   const totalContests = hasData ? connectedProfiles.reduce((s,p) => s + (p.contestsAttended ?? 0), 0) : null
 
