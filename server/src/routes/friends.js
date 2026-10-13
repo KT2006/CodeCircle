@@ -12,7 +12,7 @@ import { z } from 'zod'
 import requireAuth from '../middleware/requireAuth.js'
 import * as friendsRepo from '../repositories/friends.js'
 import * as platformAccountsRepo from '../repositories/platformAccounts.js'
-import { fetchPlatformProfiles, streamPlatformProfiles } from '../services/platformProfiles.js'
+import { fetchPlatformProfiles, streamPlatformProfiles, getCurrentStreak } from '../services/platformProfiles.js'
 import { saveFriendProfile } from '../repositories/profileData.js'
 import pool from '../db/pool.js'
 
@@ -39,6 +39,173 @@ const addFriendSchema = z.object({
 
 // ── Helper: build a normalised friend object from DB rows + snapshots ─────────
 
+// ── Helper: build a normalised friend object from DB rows + snapshots ─────────
+
+const PLATFORM_LABEL_MAP = {
+  leetcode: 'LeetCode',
+  codeforces: 'Codeforces',
+  codechef: 'CodeChef',
+  atcoder: 'AtCoder',
+  geeksforgeeks: 'GeeksForGeeks',
+}
+function platformLabel(p) { return PLATFORM_LABEL_MAP[p] ?? p }
+
+function extractFriendActivity(handles) {
+  const now = new Date()
+  const todayUtc = now.toISOString().slice(0, 10)
+  const todayLocal = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 10)
+  const todayKeys = new Set([todayUtc, todayLocal])
+  const oneDayAgoMs = Date.now() - 24 * 60 * 60 * 1000
+
+  const todayPlatforms = []
+  const todayProblems = []
+  let totalSolvedToday = 0
+  let totalSubmissionsToday = 0
+
+  const recentProblems = []
+
+  for (const h of handles) {
+    const raw = h.snapshot?.raw_meta
+    if (!raw) continue
+
+    const pKey = h.platform
+    const pLabel = platformLabel(pKey)
+
+    const platformTodayProblems = []
+    const platformRecentProblems = []
+
+    // 1. LeetCode recentSubmissions
+    const seenTitles = new Set()
+    if (Array.isArray(raw.recentSubmissions)) {
+      for (const sub of raw.recentSubmissions) {
+        if (!sub?.title) continue
+        const slug = (sub.titleSlug || sub.title).toLowerCase().trim()
+        if (seenTitles.has(slug)) continue
+
+        const subDateStr = sub.solvedAt ? sub.solvedAt.slice(0, 10) : ''
+        const subTime = sub.solvedAt ? new Date(sub.solvedAt).getTime() : 0
+        const isToday = todayKeys.has(subDateStr) || (subTime > 0 && subTime >= oneDayAgoMs)
+
+        const item = {
+          title: sub.title,
+          platform: pKey,
+          platformLabel: pLabel,
+          url: sub.url || (sub.titleSlug ? `https://leetcode.com/problems/${sub.titleSlug}` : null),
+          solvedAt: sub.solvedAt,
+          difficulty: sub.difficulty || null,
+        }
+
+        if (isToday) {
+          seenTitles.add(slug)
+          platformTodayProblems.push(item)
+          todayProblems.push(item)
+        } else {
+          platformRecentProblems.push(item)
+        }
+      }
+    }
+
+    // 2. Codeforces solvedProblems
+    if (Array.isArray(raw.solvedProblems)) {
+      for (const p of raw.solvedProblems) {
+        if (!p?.name) continue
+        const key = (p.problemKey || p.name).toLowerCase().trim()
+        if (seenTitles.has(key)) continue
+
+        const solvedDateStr = p.firstSolvedAt ? p.firstSolvedAt.slice(0, 10) : ''
+        const solvedTime = p.firstSolvedAt ? new Date(p.firstSolvedAt).getTime() : 0
+        const isToday = todayKeys.has(solvedDateStr) || (solvedTime > 0 && solvedTime >= oneDayAgoMs)
+
+        let cfUrl = null
+        if (p.problemKey && p.problemKey.startsWith('cf:')) {
+          const parts = p.problemKey.split(':')
+          if (parts[1] && parts[2]) {
+            cfUrl = `https://codeforces.com/problemset/problem/${parts[1]}/${parts[2]}`
+          }
+        }
+
+        const item = {
+          title: p.name,
+          platform: pKey,
+          platformLabel: pLabel,
+          url: cfUrl,
+          solvedAt: p.firstSolvedAt,
+          difficulty: p.difficultyRating ? `${p.difficultyRating}` : null,
+          rating: p.difficultyRating || null,
+        }
+
+        if (isToday) {
+          seenTitles.add(key)
+          platformTodayProblems.push(item)
+          todayProblems.push(item)
+        } else {
+          platformRecentProblems.push(item)
+        }
+      }
+    }
+
+    // 3. Heatmap counts
+    const activity = raw.activityByDate ?? {}
+    const activityDetails = raw.activityDetailsByDate ?? {}
+    let countToday = 0
+    let subsToday = 0
+
+    for (const key of todayKeys) {
+      if (activityDetails[key]) {
+        countToday = Math.max(countToday, activityDetails[key].solved ?? 0)
+        subsToday = Math.max(subsToday, activityDetails[key].submissions ?? 0)
+      } else if (activity[key]) {
+        subsToday = Math.max(subsToday, activity[key])
+        // If not a platform with solvedProblems/recentSubmissions, activity[key] is our only count estimate
+        countToday = Math.max(countToday, activity[key])
+      }
+    }
+
+    // Solved count for today:
+    // If the platform exposes explicit solved problem lists (LeetCode recentSubmissions or Codeforces solvedProblems),
+    // the count of problems solved today is precisely the number of distinct problems solved today.
+    let solvedTodayCount = 0
+    if (Array.isArray(raw.recentSubmissions) || Array.isArray(raw.solvedProblems)) {
+      solvedTodayCount = platformTodayProblems.length
+    } else {
+      solvedTodayCount = countToday
+    }
+
+    if (solvedTodayCount > 0 || subsToday > 0) {
+      todayPlatforms.push({
+        platform: pKey,
+        platformLabel: pLabel,
+        count: solvedTodayCount,
+        submissions: subsToday || solvedTodayCount,
+        problems: platformTodayProblems,
+      })
+      totalSolvedToday += solvedTodayCount
+      totalSubmissionsToday += (subsToday || solvedTodayCount)
+    }
+
+    if (platformRecentProblems.length > 0) {
+      recentProblems.push(...platformRecentProblems.slice(0, 6))
+    }
+  }
+
+  todayProblems.sort((a, b) => new Date(b.solvedAt || 0).getTime() - new Date(a.solvedAt || 0).getTime())
+  recentProblems.sort((a, b) => new Date(b.solvedAt || 0).getTime() - new Date(a.solvedAt || 0).getTime())
+
+  return {
+    today: {
+      hasActivity: totalSolvedToday > 0 || totalSubmissionsToday > 0,
+      solvedCount: totalSolvedToday,
+      submissionsCount: totalSubmissionsToday,
+      platforms: todayPlatforms,
+      problems: todayProblems,
+    },
+    recent: {
+      hasRecent: recentProblems.length > 0,
+      problems: recentProblems.slice(0, 6),
+    },
+  }
+}
+
 function buildFriendSummary(row) {
   // row.handles is a json_agg array of { platform, handle, status, lastSyncedAt, latestSnapshotId, snapshot? }
   const handles = (row.handles ?? []).filter(h => h && h.platform)
@@ -53,10 +220,15 @@ function buildFriendSummary(row) {
 
   const lastFetchedLabel = lastSyncedAt ? relativeTime(lastSyncedAt) : 'Never synced'
 
-  // Determine online status from lastSyncedAt
+  // Extract structured today & recent activity
+  const activityData = extractFriendActivity(handles)
+
+  // Determine online status
   const minutesAgo = lastSyncedAt ? (Date.now() - lastSyncedAt.getTime()) / 60000 : Infinity
+  const hasSolvedToday = activityData.today.hasActivity || activityData.today.solvedCount > 0
   const status =
-    minutesAgo < 60  ? 'active_recent'
+    minutesAgo < 60 ? 'active_recent'
+    : hasSolvedToday ? 'active_today'
     : minutesAgo < 1440 ? 'active_today'
     : 'inactive'
 
@@ -76,13 +248,25 @@ function buildFriendSummary(row) {
     }
   }
 
-  // streak: derive from combined activity_by_date in raw_meta if available
-  const streak = handles.reduce((best, h) => {
+  // streak: derive from combined activityByDate across handles or best platform currentStreak
+  const combinedActivity = {}
+  for (const h of handles) {
+    const act = h.snapshot?.raw_meta?.activityByDate ?? {}
+    for (const [day, count] of Object.entries(act)) {
+      if (count > 0) {
+        combinedActivity[day] = (combinedActivity[day] ?? 0) + count
+      }
+    }
+  }
+
+  const directStreak = handles.reduce((best, h) => {
     const raw = h.snapshot?.raw_meta
     if (!raw) return best
-    const s = raw.currentStreak ?? 0
+    const s = raw.currentStreak ?? raw.streak ?? 0
     return s > best ? s : best
   }, 0)
+  const activityStreak = getCurrentStreak(combinedActivity)
+  const streak = Math.max(directStreak, activityStreak)
 
   // sparkline: use the first handle that has contestHistory
   const sparklineSource = handles.find(h => Array.isArray(h.snapshot?.raw_meta?.contestHistory))
@@ -93,22 +277,41 @@ function buildFriendSummary(row) {
         .filter(r => r !== null)
     : []
 
-  // lastActivity from raw_meta activityByDate — most recent day with > 0
+  // Descriptive lastActivity
   let lastActivity = null
-  for (const h of handles) {
-    const activity = h.snapshot?.raw_meta?.activityByDate ?? {}
-    const days = Object.entries(activity)
-      .filter(([, c]) => c > 0)
-      .sort(([a], [b]) => b.localeCompare(a))
-    if (days.length > 0) {
-      const [day, count] = days[0]
-      const timeAgo = relativeTime(new Date(day + 'T12:00:00Z'))
-      lastActivity = {
-        platform: h.platform,
-        text: `${count} submission${count === 1 ? '' : 's'} on ${platformLabel(h.platform)}`,
-        timeAgo,
+  if (hasSolvedToday) {
+    const topPlatform = activityData.today.platforms[0]
+    const probNames = activityData.today.problems.slice(0, 2).map(p => p.title).join(', ')
+    lastActivity = {
+      platform: topPlatform?.platform || 'leetcode',
+      text: probNames
+        ? `Solved ${activityData.today.solvedCount} today: ${probNames}`
+        : `Solved ${activityData.today.solvedCount} on ${activityData.today.platforms.map(p => p.platformLabel).join(', ')}`,
+      timeAgo: 'today',
+    }
+  } else if (activityData.recent.hasRecent && activityData.recent.problems.length > 0) {
+    const recentProb = activityData.recent.problems[0]
+    lastActivity = {
+      platform: recentProb.platform,
+      text: `Solved "${recentProb.title}" on ${recentProb.platformLabel}`,
+      timeAgo: recentProb.solvedAt ? relativeTime(new Date(recentProb.solvedAt)) : 'recently',
+    }
+  } else {
+    for (const h of handles) {
+      const activity = h.snapshot?.raw_meta?.activityByDate ?? {}
+      const days = Object.entries(activity)
+        .filter(([, c]) => c > 0)
+        .sort(([a], [b]) => b.localeCompare(a))
+      if (days.length > 0) {
+        const [day, count] = days[0]
+        const timeAgo = relativeTime(new Date(day + 'T12:00:00Z'))
+        lastActivity = {
+          platform: h.platform,
+          text: `${count} submission${count === 1 ? '' : 's'} on ${platformLabel(h.platform)}`,
+          timeAgo,
+        }
+        break
       }
-      break
     }
   }
 
@@ -127,6 +330,8 @@ function buildFriendSummary(row) {
     lastActivity,
     handles:       handles.map(h => ({ platform: h.platform, handle: h.handle })),
     lastSyncedAt:  lastSyncedAt?.toISOString() ?? null,
+    todayActivity: activityData.today,
+    recentActivity: activityData.recent,
   }
 }
 
@@ -464,13 +669,20 @@ router.get('/:id', async (req, res) => {
   const totalSolved = Object.values(profiles).reduce((s, p) => s + (p.problemsSolved ?? 0), 0)
   const totalContests = Object.values(profiles).reduce((s, p) => s + (p.contestsAttended ?? 0), 0)
 
-  // Streak from activity
+  // Streak from activity & platforms
   const combinedActivity = {}
   for (const p of Object.values(profiles)) {
     for (const [day, count] of Object.entries(p.activityByDate ?? {})) {
       combinedActivity[day] = (combinedActivity[day] ?? 0) + count
     }
   }
+
+  const directStreak = Object.values(profiles).reduce((best, p) => {
+    const s = p.currentStreak ?? p.streak ?? 0
+    return s > best ? s : best
+  }, 0)
+  const activityStreak = getCurrentStreak(combinedActivity)
+  const calculatedStreak = Math.max(directStreak, activityStreak)
 
   // Recent contests (latest 3 across all platforms)
   const allContests = []
@@ -567,7 +779,7 @@ router.get('/:id', async (req, res) => {
       cfRating:         { value: cfProfile?.rating ?? null,      delta: null },
       problemsSolved:   { value: totalSolved,                    delta: null },
       contestsAttended: { value: totalContests,                  sub: null   },
-      currentStreak:    { value: cfProfile?.currentStreak ?? 0,  best: null  },
+      currentStreak:    { value: calculatedStreak,               best: null  },
     },
     platformSolved,
     ratingHistory,
@@ -605,8 +817,5 @@ function avatarColor(id = '') {
   const sum = [...id.slice(0, 8)].reduce((s, c) => s + c.charCodeAt(0), 0)
   return AVATAR_COLORS[sum % AVATAR_COLORS.length]
 }
-
-const PLATFORM_LABEL_MAP = { leetcode: 'LeetCode', codeforces: 'Codeforces', codechef: 'CodeChef', atcoder: 'AtCoder', geeksforgeeks: 'GeeksForGeeks' }
-function platformLabel(p) { return PLATFORM_LABEL_MAP[p] ?? p }
 
 export default router

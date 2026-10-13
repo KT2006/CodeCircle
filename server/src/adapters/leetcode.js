@@ -46,6 +46,12 @@ const PROFILE_QUERY = `
         startTime
       }
     }
+    recentAcSubmissionList(username: $username, limit: 20) {
+      id
+      title
+      titleSlug
+      timestamp
+    }
   }
 `
 
@@ -175,6 +181,21 @@ export async function fetchProfile(rawHandle) {
       .filter((entry) => entry.date && Number.isFinite(Date.parse(entry.date)))
     : []
 
+  const recentSubmissions = Array.isArray(payload.data?.recentAcSubmissionList)
+    ? payload.data.recentAcSubmissionList
+        .filter((sub) => sub?.title && sub?.timestamp)
+        .map((sub) => {
+          const date = new Date(Number(sub.timestamp) * 1000)
+          return {
+            id: String(sub.id || ''),
+            title: sub.title,
+            titleSlug: sub.titleSlug,
+            url: sub.titleSlug ? `https://leetcode.com/problems/${sub.titleSlug}` : null,
+            solvedAt: Number.isFinite(date.getTime()) ? date.toISOString() : null,
+          }
+        })
+    : []
+
   return {
     platform,
     username: matchedUser.username,
@@ -186,8 +207,8 @@ export async function fetchProfile(rawHandle) {
       contestRanking?.rating !== null &&
       contestRanking?.rating !== undefined &&
       Number.isFinite(Number(contestRanking.rating))
-      ? Number(contestRanking.rating)
-      : null,
+        ? Number(contestRanking.rating)
+        : null,
     contestGlobalRanking: Number(contestRanking?.globalRanking) || null,
     contestHistory,
     currentStreak: matchedUser.userCalendar
@@ -199,5 +220,6 @@ export async function fetchProfile(rawHandle) {
     ),
     activityByDate: Object.fromEntries(activityByDate),
     topics: [...tagsBySlug.values()].sort((left, right) => right.problemsSolved - left.problemsSolved),
+    recentSubmissions,
   }
 }

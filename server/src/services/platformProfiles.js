@@ -4,7 +4,7 @@ import { fetchProfile as fetchCodeChefProfile } from '../adapters/codechef.js'
 import { fetchProfile as fetchAtCoderProfile } from '../adapters/atcoder.js'
 import { fetchProfile as fetchGeeksForGeeksProfile } from '../adapters/geeksforgeeks.js'
 
-const getCurrentStreak = (activityByDate) => {
+export const getCurrentStreak = (activityByDate = {}) => {
   const today = new Date()
   const todayKey = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()))
     .toISOString()

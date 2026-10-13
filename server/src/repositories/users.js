@@ -84,3 +84,52 @@ export async function updateSettings(id, includeContests) {
   )
   return rows[0]
 }
+
+/**
+ * Find a user by their chosen username (case-insensitive).
+ *
+ * @param {string} username
+ * @returns {Promise<object|null>}
+ */
+export async function findByUsername(username) {
+  const { rows } = await pool.query(
+    'SELECT * FROM users WHERE lower(username) = lower($1)',
+    [username],
+  )
+  return rows[0] ?? null
+}
+
+/**
+ * Check if a username is available (not taken by anyone else).
+ * Optionally exclude a userId so a user can "re-set" their own username
+ * without it being reported as taken.
+ *
+ * @param {string} username
+ * @param {string|null} excludeUserId
+ * @returns {Promise<boolean>} true = available
+ */
+export async function checkUsernameAvailable(username, excludeUserId = null) {
+  const { rows } = await pool.query(
+    `SELECT id FROM users
+     WHERE lower(username) = lower($1)
+       AND ($2::uuid IS NULL OR id <> $2)`,
+    [username, excludeUserId ?? null],
+  )
+  return rows.length === 0
+}
+
+/**
+ * Set the username for a user. Returns the updated user row.
+ * Throws a DB unique-constraint error if already taken (race condition safety net).
+ *
+ * @param {string} id
+ * @param {string} username  already validated & lowercased by the caller
+ * @returns {Promise<object>}
+ */
+export async function setUsername(id, username) {
+  const { rows } = await pool.query(
+    `UPDATE users SET username = $2 WHERE id = $1 RETURNING *`,
+    [id, username],
+  )
+  return rows[0]
+}

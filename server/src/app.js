@@ -30,6 +30,7 @@ import profileRoutes from './routes/profile.js'
 import friendsRoutes from './routes/friends.js'
 import compareRoutes from './routes/compare.js'
 import platformProfilesRoutes from './routes/platformProfiles.js'
+import publicRoutes from './routes/public.js'
 import testRoutes from './routes/test.js'
 
 // ── Build the app ─────────────────────────────────────────────────────────────
@@ -82,6 +83,7 @@ app.use('/api/profile', profileRoutes)
 app.use('/api/friends', friendsRoutes)
 app.use('/api/compare', compareRoutes)
 app.use('/api/platform-profiles', platformProfilesRoutes)
+app.use('/api/public', publicRoutes)
 
 // Temporary test routes — only in development
 if (env.NODE_ENV !== 'production') {

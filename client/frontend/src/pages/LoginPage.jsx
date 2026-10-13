@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth/useAuth'
 import { getReturnTo } from '../auth/returnTo'
-import codecircleEmblem from '../assets/codecircle_emblem.jpg'
+import codecircleEmblem from '../assets/codecircle_emblem.png'
 
 const LoginPage = () => {
   const [isGoogleReady, setIsGoogleReady] = useState(false)

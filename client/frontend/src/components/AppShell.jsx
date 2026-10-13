@@ -2,6 +2,7 @@ import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth/useAuth'
 import { useEffect, useState } from 'react'
 import { LogOut } from 'lucide-react'
+import UsernamePickerModal from './UsernamePickerModal'
 
 const NAV_ITEMS = [
   { label: 'Profile',  href: '/profile'  },
@@ -12,7 +13,7 @@ const NAV_ITEMS = [
 const AppShell = () => {
   const { pathname }             = useLocation()
   const navigate                 = useNavigate()
-  const { error, setError, user, signOut } = useAuth()
+  const { error, setError, user, signOut, updateUser } = useAuth()
 
   const [theme, setTheme] = useState(() => {
     try { return localStorage.getItem('cc-theme') || 'auto' } catch { return 'auto' }
@@ -45,6 +46,10 @@ const AppShell = () => {
 
   return (
     <div style={{ background: 'var(--bg)', color: 'var(--text)', minHeight: '100dvh' }}>
+      {/* Username picker — blocking modal shown until user claims a username */}
+      {user && !user.username && (
+        <UsernamePickerModal onSave={(updatedUser) => updateUser(updatedUser)} />
+      )}
       {/* ── Top nav — matches reference .top-nav exactly ── */}
       <nav aria-label="Main" className="top-nav">
         {/* Logo */}

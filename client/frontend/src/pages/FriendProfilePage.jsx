@@ -1236,7 +1236,14 @@ const FriendProfilePage = () => {
     return map
   }, [friendData, connectedProfiles])
 
-  const currentStreak   = useMemo(() => getCurrentStreak(combinedActivity), [combinedActivity])
+  const currentStreak   = useMemo(() => {
+    const actStreak = getCurrentStreak(combinedActivity)
+    const directStreak = connectedProfiles.reduce((best, p) => {
+      const s = p.currentStreak ?? p.streak ?? 0
+      return s > best ? s : best
+    }, 0)
+    return Math.max(actStreak, directStreak)
+  }, [combinedActivity, connectedProfiles])
   const totalActiveDays = useMemo(() => countActiveDays(combinedActivity), [combinedActivity])
   const last30          = useMemo(() => sumActivityDays(combinedActivity, 30), [combinedActivity])
 

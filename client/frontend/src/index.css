@@ -317,7 +317,17 @@ body { margin: 0; }
   max-width: 1120px;
   margin: 0 auto;
   display: grid;
-  gap: 12px;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 14px;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+.cc-friends > * {
+  min-width: 0;
+  max-width: 100%;
+  width: 100%;
+  box-sizing: border-box;
 }
 .cc-friends .mono { font-family: 'JetBrains Mono', ui-monospace, monospace; }
 .cc-friends h1, .cc-friends h2, .cc-friends .d {
@@ -329,6 +339,7 @@ body { margin: 0; }
   border: 1px solid var(--line);
   border-radius: 20px;
   padding: 18px 20px;
+  box-sizing: border-box;
 }
 .cc-friends .m { color: var(--mute); }
 .cc-friends button, .cc-friends select, .cc-friends input {
@@ -341,7 +352,7 @@ body { margin: 0; }
   background: transparent;
   border-radius: 999px;
   padding: 9px 18px;
-  transition: transform .15s;
+  transition: transform .15s, background .15s, color .15s;
 }
 .cc-friends button:active { transform: scale(.96); }
 .cc-friends :focus-visible { outline: 2px solid var(--you); outline-offset: 2px; }
@@ -357,8 +368,8 @@ body { margin: 0; }
   border-color: var(--text);
 }
 .cc-friends h1 {
-  font-size: clamp(38px, 6vw, 68px);
-  line-height: 1;
+  font-size: clamp(34px, 5.5vw, 64px);
+  line-height: 1.05;
   font-weight: 800;
   margin: 8px 0 10px;
 }
@@ -367,8 +378,11 @@ body { margin: 0; }
   grid-template-columns: repeat(4, 1fr);
   gap: 12px;
 }
+.cc-friends .nums .c {
+  min-width: 0;
+}
 .cc-friends .nums .d {
-  font-size: clamp(30px, 4vw, 42px);
+  font-size: clamp(28px, 4vw, 42px);
   font-weight: 800;
   line-height: 1;
 }
@@ -377,7 +391,97 @@ body { margin: 0; }
   display: block;
   margin-top: 6px;
   font-size: 13px;
+  line-height: 1.35;
 }
+
+/* ── Segmented Tabs (matches Profile and Compare standard) ── */
+.cc-friends-tabs {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+}
+.cc-friends-tabs .cc-tab-btn,
+.cc-friends-tabs button {
+  white-space: nowrap;
+}
+
+/* ── Modern Search & Action Bar ── */
+.cc-friends-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  box-sizing: border-box;
+  flex-wrap: wrap;
+}
+.cc-friends-search-box {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 1 1 240px;
+  min-width: 0;
+  max-width: 360px;
+}
+.cc-search-icon {
+  position: absolute;
+  left: 14px;
+  color: var(--mute);
+  pointer-events: none;
+}
+.cc-friends-search-input {
+  width: 100%;
+  background: var(--surf);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 9px 36px 9px 38px;
+  font-size: 13.5px;
+  color: var(--text);
+  box-sizing: border-box;
+  outline: none;
+  transition: border-color .15s, box-shadow .15s;
+}
+.cc-friends-search-input:focus {
+  border-color: var(--you);
+  box-shadow: 0 0 0 2px var(--you);
+}
+.cc-search-clear-btn {
+  position: absolute;
+  right: 12px;
+  background: transparent;
+  border: none;
+  color: var(--mute);
+  cursor: pointer;
+  padding: 4px;
+  font-size: 12px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.cc-search-clear-btn:hover {
+  color: var(--text);
+}
+.cc-friends-filter-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+  flex-wrap: wrap;
+}
+.cc-friends-sort {
+  min-width: 150px;
+  height: 38px;
+}
+.cc-friends-add-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 38px;
+  padding: 8px 18px;
+  white-space: nowrap;
+}
+
 .cc-friends .bar {
   display: flex;
   gap: 10px;
@@ -476,6 +580,47 @@ body { margin: 0; }
   border-bottom: 1px solid var(--line);
 }
 .cc-friends .act:last-child { border: 0; }
+.cc-friends .act-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.cc-friends .act-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.cc-friends .act-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cc-friends .act-text-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  min-width: 0;
+}
+.cc-friends .act-plat-icon {
+  width: 14px;
+  height: 14px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+.cc-friends .act-text-content {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .cc-friends .act .t {
   margin-left: auto;
   color: var(--mute);
@@ -500,20 +645,45 @@ body { margin: 0; }
   border-radius: 11px;
   font-size: 15px;
 }
-.cc-friends .grid {
+.cc-friends .grid,
+.cc-friends .cc-friends-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+.cc-friends .grid > *,
+.cc-friends .cc-friends-grid > * {
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 .cc-friends .fc {
   display: flex;
   flex-direction: column;
   gap: 14px;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
 }
 .cc-friends .top {
   display: flex;
   gap: 12px;
   align-items: center;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+.cc-friends .top > div:nth-child(2) {
+  min-width: 0;
+  flex: 1 1 0;
+  overflow: hidden;
 }
 .cc-friends .top .n {
   font: 700 19px 'Bricolage Grotesque', sans-serif;
@@ -537,21 +707,42 @@ body { margin: 0; }
 .cc-friends .last {
   display: flex;
   justify-content: space-between;
+  align-items: center;
   gap: 8px;
   padding-top: 12px;
   border-top: 1px solid var(--line);
   font-size: 13px;
   color: var(--mute);
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+.cc-friends .last span:first-child {
+  min-width: 0;
+  flex: 1 1 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cc-friends .last span:last-child {
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 .cc-friends .btns {
   display: flex;
   gap: 8px;
   margin-top: auto;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
 }
 .cc-friends .btns button {
-  flex: 1;
+  flex: 1 1 0;
+  min-width: 0;
   padding: 8px;
   text-align: center;
+  box-sizing: border-box;
 }
 .cc-friends .dot {
   display: inline-block;
@@ -560,6 +751,7 @@ body { margin: 0; }
   border-radius: 50%;
   margin-right: 6px;
   background: var(--mute);
+  flex-shrink: 0;
 }
 .cc-friends .dot.live { background: var(--you); }
 .cc-friends .dash {
@@ -572,13 +764,370 @@ body { margin: 0; }
   gap: 10px;
   min-height: 220px;
   grid-column: 1 / -1;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
 }
 .cc-friends .empty {
   grid-column: 1 / -1;
   text-align: center;
   padding: 36px;
   color: var(--mute);
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
 }
+
+/* ── Active Today Section & Activity Breakdown ── */
+.cc-friends .today-hub {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  grid-column: 1 / -1;
+}
+
+.cc-friends .today-hub-banner {
+  background: linear-gradient(135deg, rgba(198, 244, 50, 0.08) 0%, rgba(30, 28, 25, 0.6) 100%);
+  border: 1px solid rgba(198, 244, 50, 0.25);
+  border-radius: var(--r);
+  padding: 22px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  position: relative;
+  overflow: hidden;
+}
+
+.cc-friends .today-hub-banner::after {
+  content: '';
+  position: absolute;
+  top: -50px;
+  right: -50px;
+  width: 160px;
+  height: 160px;
+  background: radial-gradient(circle, rgba(198, 244, 50, 0.15) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.cc-friends .today-hub-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.cc-friends .today-hub-title {
+  font: 700 22px 'Bricolage Grotesque', sans-serif;
+  letter-spacing: -.02em;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.cc-friends .today-circle-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.cc-friends .today-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 99px;
+  font-size: 13px;
+  font-weight: 600;
+  background: var(--surf2);
+  border: 1px solid var(--line);
+  color: var(--text);
+}
+
+.cc-friends .today-pill.accent {
+  background: rgba(198, 244, 50, 0.14);
+  border-color: rgba(198, 244, 50, 0.4);
+  color: var(--you);
+}
+
+.cc-friends .today-pill img {
+  width: 16px;
+  height: 16px;
+  object-fit: contain;
+}
+
+/* ── Today Feed Cards ── */
+.cc-friends .today-feed {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.cc-friends .today-card {
+  background: var(--surf);
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  transition: border-color .15s ease, transform .15s ease;
+}
+
+.cc-friends .today-card:hover {
+  border-color: rgba(198, 244, 50, 0.35);
+}
+
+.cc-friends .today-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.cc-friends .today-card-user {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.cc-friends .today-card-user .n {
+  font: 700 18px 'Bricolage Grotesque', sans-serif;
+  letter-spacing: -.02em;
+}
+
+.cc-friends .today-solved-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border-radius: 99px;
+  background: var(--you);
+  color: var(--on);
+  font-weight: 700;
+  font-size: 13px;
+  box-shadow: 0 0 14px rgba(198, 244, 50, 0.3);
+}
+
+.cc-friends .today-card-platforms {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.cc-friends .today-card-plat-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  background: var(--surf2);
+  border: 1px solid var(--line);
+}
+
+.cc-friends .today-card-plat-pill img {
+  width: 14px;
+  height: 14px;
+  object-fit: contain;
+}
+
+.cc-friends .today-prob-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.cc-friends .today-prob-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: var(--surf2);
+  border: 1px solid var(--line);
+  font-size: 14px;
+  transition: all .15s ease;
+}
+
+.cc-friends .today-prob-row:hover {
+  background: rgba(198, 244, 50, 0.04);
+  border-color: rgba(198, 244, 50, 0.3);
+}
+
+.cc-friends .today-prob-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  flex: 1;
+}
+
+.cc-friends .today-prob-info img {
+  width: 16px;
+  height: 16px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+.cc-friends .today-prob-title {
+  font-weight: 600;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.cc-friends .today-prob-title:hover {
+  color: var(--you);
+}
+
+.cc-friends .today-diff-badge {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 6px;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  flex-shrink: 0;
+}
+
+.cc-friends .today-diff-badge.easy { background: rgba(34, 197, 94, 0.15); color: #22c55e; }
+.cc-friends .today-diff-badge.medium { background: rgba(234, 179, 8, 0.15); color: #eab308; }
+.cc-friends .today-diff-badge.hard { background: rgba(239, 68, 68, 0.15); color: #ef4444; }
+.cc-friends .today-diff-badge.rating { background: rgba(59, 130, 246, 0.15); color: #60a5fa; }
+
+.cc-friends .today-expand-btn {
+  background: transparent;
+  border: 1px dashed var(--line);
+  color: var(--mute);
+  padding: 8px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  width: 100%;
+  text-align: center;
+  cursor: pointer;
+  transition: all .15s ease;
+}
+
+.cc-friends .today-expand-btn:hover {
+  border-color: var(--you);
+  color: var(--you);
+  background: rgba(198, 244, 50, 0.04);
+}
+
+/* ── Friend Card Today Enhancements ── */
+.cc-friends .card-today-highlight {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(198, 244, 50, 0.05);
+  border: 1px solid rgba(198, 244, 50, 0.2);
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+.cc-friends .card-today-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+}
+
+.cc-friends .card-today-count {
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--you);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.cc-friends .card-today-plat-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.cc-friends .card-mini-plat-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 7px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  background: var(--surf2);
+  border: 1px solid var(--line);
+}
+
+.cc-friends .card-mini-plat-pill img {
+  width: 12px;
+  height: 12px;
+  object-fit: contain;
+}
+
+.cc-friends .card-today-probs {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--text);
+  overflow: hidden;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.cc-friends .card-today-prob-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.cc-friends .card-today-prob-item a,
+.cc-friends .card-today-prob-item span:not(:first-child) {
+  color: var(--text);
+  text-decoration: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+  flex: 1 1 0;
+}
+
+.cc-friends .card-today-prob-item a:hover {
+  color: var(--you);
+  text-decoration: underline;
+}
+
 
 .cc-friends .lbrow {
   display: grid;
@@ -599,6 +1148,12 @@ body { margin: 0; }
   font: 800 15px 'Bricolage Grotesque', sans-serif;
   flex: none;
 }
+.cc-friends .lbinfo {
+  min-width: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
 .cc-friends .lbname {
   font-size: 14px;
   font-weight: 500;
@@ -618,25 +1173,148 @@ body { margin: 0; }
   vertical-align: middle;
 }
 .cc-friends .lbst { font-size: 12px; white-space: nowrap; }
+.cc-friends .lbst-mobile { display: none; }
+.cc-friends .lbscore-wrap {
+  text-align: right;
+  min-width: 44px;
+  flex-shrink: 0;
+}
 .cc-friends .lbscore {
   font-size: 16px;
   font-weight: 700;
   color: var(--text);
-  min-width: 40px;
-  text-align: right;
 }
+.cc-friends .lbscore-sub { display: none; }
 
 @media (max-width: 860px) {
-  .cc-friends .grid { grid-template-columns: 1fr 1fr; }
+  .cc-friends .grid,
+  .cc-friends .cc-friends-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+  }
   .cc-friends .nums { grid-template-columns: 1fr 1fr; }
+  .cc-friends-bar { gap: 10px; }
+  .cc-friends-search-box { max-width: 100%; flex: 1 1 200px; }
+  .cc-friends-filter-actions { margin-left: 0; width: 100%; justify-content: space-between; }
+  .cc-friends-sort { flex: 1; }
+  .cc-friends .lbrow { gap: 10px; grid-template-columns: 28px 36px 1fr auto auto; }
   .cc-friends .bar .sp { margin-left: 0; width: 100%; }
 }
+
 @media (max-width: 560px) {
-  .cc-friends .grid { grid-template-columns: 1fr; }
-  .cc-friends .nums { grid-template-columns: 1fr 1fr; gap: 8px; }
-  .cc-friends .nums .d { font-size: 30px; }
-  .cc-friends .nums small { font-size: 12px; }
-  .cc-friends .bar { gap: 8px; padding: 0; }
+  /* Page container & Base card padding - matches Profile and Compare */
+  .cc-friends {
+    gap: 12px;
+    width: 100%;
+  }
+  .cc-friends .c {
+    padding: 16px 14px;
+    border-radius: 18px;
+  }
+
+  /* Hero section */
+  .cc-friends h1 {
+    font-size: clamp(24px, 6.2vw, 32px);
+    line-height: 1.15;
+    margin: 6px 0 8px;
+  }
+  .cc-friends-hero-sub {
+    font-size: 13px !important;
+    line-height: 1.45;
+  }
+
+  /* Numbers summary row */
+  .cc-friends .nums {
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  .cc-friends .nums .c {
+    padding: 13px 12px;
+    border-radius: 16px;
+  }
+  .cc-friends .nums .d {
+    font-size: clamp(22px, 5.5vw, 28px);
+    line-height: 1;
+  }
+  .cc-friends .nums small {
+    font-size: 11.5px;
+    line-height: 1.3;
+    margin-top: 4px;
+  }
+
+  /* Segmented tabs - 100% full width grid matching Profile .cc-tabs */
+  .cc-friends-tabs {
+    display: grid !important;
+    grid-template-columns: repeat(2, 1fr) !important;
+    width: 100% !important;
+    gap: 8px !important;
+    padding-bottom: 0 !important;
+  }
+  .cc-friends-tabs button,
+  .cc-friends-tabs .cc-tab-btn {
+    width: 100% !important;
+    min-width: 0 !important;
+    padding: 9px 6px !important;
+    font-size: 13px !important;
+    font-weight: 600 !important;
+    text-align: center !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    box-sizing: border-box !important;
+    border-radius: 999px !important;
+  }
+
+  /* Toolbar: Search input full width, Sort & Add Friend button on next row */
+  .cc-friends-bar {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 8px !important;
+    width: 100% !important;
+  }
+  .cc-friends-search-box {
+    width: 100% !important;
+    max-width: 100% !important;
+    flex: none !important;
+  }
+  .cc-friends-search-input {
+    width: 100% !important;
+    height: 40px !important;
+    font-size: 13.5px !important;
+    padding: 8px 36px 8px 38px !important;
+  }
+  .cc-friends-filter-actions {
+    display: flex !important;
+    gap: 8px !important;
+    width: 100% !important;
+    margin-left: 0 !important;
+  }
+  .cc-friends-sort {
+    flex: 1 1 0 !important;
+    min-width: 0 !important;
+    height: 40px !important;
+    font-size: 13px !important;
+    padding-left: 12px !important;
+    padding-right: 32px !important;
+  }
+  .cc-friends-add-btn {
+    flex: 1 1 0 !important;
+    min-width: 0 !important;
+    height: 40px !important;
+    font-size: 13px !important;
+    padding: 8px 12px !important;
+    justify-content: center !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 6px !important;
+    white-space: nowrap !important;
+  }
+
+  /* Old toolbar fallback rules */
+  .cc-friends .bar { gap: 8px; padding: 0; flex-wrap: wrap; }
   .cc-friends .bar button { padding: 8px 14px; font-size: 13px; }
   .cc-friends .bar .sp {
     display: flex;
@@ -649,7 +1327,7 @@ body { margin: 0; }
   .cc-friends .bar .sp input {
     flex: 1 1 120px;
     width: auto;
-    max-width: 180px;
+    max-width: 100%;
     min-width: 0;
     padding: 8px 14px;
     font-size: 13px;
@@ -672,12 +1350,342 @@ body { margin: 0; }
     height: 38px;
     white-space: nowrap;
   }
-  .cc-friends .lbrow { gap: 8px; grid-template-columns: 20px 32px 1fr auto auto; }
-  .cc-friends .lbav { width: 32px; height: 32px; font-size: 13px; }
-  .cc-friends .lbname { font-size: 13px; }
-  .cc-friends .lbst { font-size: 11px; }
-  .cc-friends .lbscore { font-size: 14px; }
-  .cc-friends h1 { font-size: 34px; }
+
+  /* Leaderboard row on mobile - keeps streak visible! */
+  .cc-friends .lbrow {
+    gap: 10px;
+    grid-template-columns: 22px 34px 1fr auto;
+    padding: 10px 0;
+  }
+  .cc-friends .lbrank {
+    font-size: 13px;
+    text-align: center;
+  }
+  .cc-friends .lbav {
+    width: 34px;
+    height: 34px;
+    font-size: 14px;
+    border-radius: 10px;
+  }
+  .cc-friends .lbinfo {
+    min-width: 0;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .cc-friends .lbname {
+    font-size: 13.5px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .cc-friends .lbst-desktop {
+    display: none !important;
+  }
+  .cc-friends .lbst-mobile {
+    display: block !important;
+    font-size: 11px;
+    color: var(--mute);
+  }
+  .cc-friends .lbscore-wrap {
+    text-align: right;
+    min-width: 40px;
+  }
+  .cc-friends .lbscore {
+    font-size: 15px;
+    font-weight: 700;
+  }
+  .cc-friends .lbscore-sub {
+    display: block !important;
+    font-size: 10.5px;
+    margin-top: -2px;
+    color: var(--mute);
+  }
+
+  /* Recent activity list on mobile */
+  .cc-friends .act {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    padding: 10px 0;
+  }
+  .cc-friends .act .av {
+    width: 32px;
+    height: 32px;
+    font-size: 13px;
+    border-radius: 10px;
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+  .cc-friends .act-body {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .cc-friends .act-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 6px;
+  }
+  .cc-friends .act-name {
+    font-size: 13.5px;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .cc-friends .act .t {
+    font-size: 12px;
+    margin-left: auto;
+  }
+  .cc-friends .act-text-row {
+    font-size: 12.5px;
+    line-height: 1.35;
+    color: var(--mute);
+    word-break: break-word;
+  }
+  .cc-friends .act-plat-icon {
+    width: 13px;
+    height: 13px;
+    margin-right: 4px;
+    vertical-align: -2px;
+    display: inline-block;
+  }
+
+  /* Friends card grid */
+  .cc-friends .grid,
+  .cc-friends .cc-friends-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+    gap: 12px !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+  }
+  .cc-friends .grid > *,
+  .cc-friends .cc-friends-grid > * {
+    min-width: 0 !important;
+    max-width: 100% !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+  }
+  .cc-friends .fc {
+    padding: 16px 14px;
+    border-radius: 18px;
+    gap: 12px;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+    overflow: hidden !important;
+  }
+  .cc-friends .top {
+    gap: 10px;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+  }
+  .cc-friends .top > div:nth-child(2) {
+    min-width: 0 !important;
+    flex: 1 1 0 !important;
+    overflow: hidden !important;
+  }
+  .cc-friends .top .n {
+    font-size: 16px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .cc-friends .top .m {
+    font-size: 12.5px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .cc-friends .av {
+    width: 38px;
+    height: 38px;
+    font-size: 16px;
+    border-radius: 12px;
+    flex-shrink: 0;
+  }
+  .cc-friends .big {
+    font-size: 32px;
+  }
+  .cc-friends .btns {
+    gap: 8px;
+    margin-top: 4px;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+  }
+  .cc-friends .btns button {
+    height: 38px;
+    padding: 8px 10px;
+    font-size: 13px;
+    font-weight: 600;
+    min-width: 0 !important;
+    flex: 1 1 0 !important;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* Dashed add card & empty states */
+  .cc-friends .dash {
+    min-height: 130px;
+    padding: 18px 14px;
+    border-radius: 16px;
+    gap: 8px;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+    overflow: hidden !important;
+  }
+  .cc-friends .dash b {
+    font-size: 15px;
+    word-break: break-word;
+    text-align: center;
+  }
+  .cc-friends .dash .m {
+    font-size: 12.5px;
+    word-break: break-word;
+    text-align: center;
+  }
+  .cc-friends .dash button {
+    height: 36px;
+    padding: 7px 16px;
+    font-size: 13px;
+  }
+  .cc-friends .empty {
+    padding: 24px 14px;
+    font-size: 13px;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+  }
+
+  /* Active Today Hub Breakdown */
+  .cc-friends .today-hub {
+    gap: 14px;
+  }
+  .cc-friends .today-hub-banner {
+    padding: 16px 14px;
+    border-radius: 18px;
+    gap: 10px;
+  }
+  .cc-friends .today-hub-title {
+    font-size: 17px;
+  }
+  .cc-friends .today-circle-pills {
+    gap: 6px;
+  }
+  .cc-friends .today-pill {
+    padding: 4px 10px;
+    font-size: 12px;
+  }
+  .cc-friends .today-card {
+    padding: 16px 14px;
+    border-radius: 18px;
+    gap: 12px;
+  }
+  .cc-friends .today-card-header {
+    gap: 8px;
+  }
+  .cc-friends .today-card-user .n {
+    font-size: 16px;
+  }
+  .cc-friends .today-solved-badge {
+    padding: 4px 10px;
+    font-size: 12px;
+  }
+  .cc-friends .today-prob-row {
+    padding: 8px 10px;
+    border-radius: 10px;
+    font-size: 13px;
+    gap: 8px;
+  }
+  .cc-friends .today-prob-info {
+    gap: 6px;
+  }
+  .cc-friends .today-prob-title {
+    font-size: 13px;
+  }
+  .cc-friends .today-diff-badge {
+    font-size: 10px;
+    padding: 2px 6px;
+  }
+  .cc-friends .today-expand-btn {
+    padding: 7px;
+    font-size: 12.5px;
+  }
+
+  /* Modal on Mobile */
+  .cc-modal-backdrop {
+    padding: 12px;
+  }
+  .cc-modal-box {
+    max-height: 94vh;
+    border-radius: 18px;
+  }
+  .cc-modal-header {
+    padding: 16px 18px 14px;
+  }
+  .cc-modal-header h2 {
+    font-size: 18px;
+  }
+  .cc-modal-body {
+    padding: 16px 18px;
+    gap: 14px;
+  }
+}
+
+@media (max-width: 380px) {
+  .cc-friends .nums {
+    gap: 6px;
+  }
+  .cc-friends .nums .c {
+    padding: 10px 8px;
+  }
+  .cc-friends .nums .d {
+    font-size: 20px;
+  }
+  .cc-friends .nums small {
+    font-size: 10.5px;
+  }
+  .cc-friends-tabs button,
+  .cc-friends-tabs .cc-tab-btn {
+    padding: 8px 4px !important;
+    font-size: 12px !important;
+  }
+  .cc-friends-sort,
+  .cc-friends-add-btn {
+    font-size: 12px !important;
+    padding-left: 8px !important;
+    padding-right: 8px !important;
+  }
+  .cc-friends .lbrow {
+    gap: 6px;
+    grid-template-columns: 18px 30px 1fr auto;
+  }
+  .cc-friends .lbav {
+    width: 30px;
+    height: 30px;
+    font-size: 12px;
+  }
+  .cc-friends .lbname {
+    font-size: 12.5px;
+  }
+  .cc-friends .lbscore {
+    font-size: 14px;
+  }
 }
 
 /* ── Modal Dialog (matches CodeCircle theme) ── */
@@ -1169,22 +2177,271 @@ body { margin: 0; }
   .cc-compare .vsb { display: none; }
   .cc-compare .g, .cc-compare .g-even { grid-template-columns: 1fr; }
   .cc-compare .mr { grid-template-columns: 1fr 90px 1fr; }
+  /* On mobile both cards stack — right card loses its RTL flip, mini aligns left */
   .cc-compare .pl.r { flex-direction: row; text-align: left; }
-  .cc-compare .r .mini { justify-content: flex-start; }
+  .cc-compare .r .mini,
+  .cc-compare .pl.r + .mini { justify-content: flex-start; }
+  /* Both VS cards get identical padding so stats line up */
+  .cc-compare .vs .c { padding: 18px 20px; }
+  .cc-compare .mini { gap: 18px; padding-top: 14px; margin-top: 14px; }
 }
 @media(max-width:560px){
   .cc-compare .c { padding: 16px 14px; }
+  .cc-compare .vs .c { padding: 16px 14px; }
   .cc-compare-hero-header { gap: 12px; }
   .cc-comp-against-wrap { width: 100%; justify-content: space-between; }
   .cc-comp-against-wrap select { flex: 1; min-width: 0; max-width: 200px; }
   .cc-compare .mr { grid-template-columns: 1fr 70px 1fr; gap: 8px; }
   .cc-compare .side b { font-size: 16px; min-width: 36px; }
-  .cc-compare .mini { gap: 12px; }
+  /* Both mini sections: same gap, same font, same left-align */
+  .cc-compare .mini { gap: 14px; }
+  .cc-compare .r .mini,
+  .cc-compare .pl.r + .mini { justify-content: flex-start; }
   .cc-compare .mini b { font-size: 17px; }
+  .cc-compare .mini small { font-size: 12px; }
   .cc-compare h1 { font-size: 32px; }
   .cc-compare .chips { gap: 6px; }
   .cc-compare .chip { font-size: 12px; padding: 4px 10px; }
+  /* Avatar same size on both cards */
+  .cc-compare .av { width: 44px; height: 44px; border-radius: 13px; font-size: 20px; }
+  .cc-compare .pl .n { font-size: 16px; }
 }
+
+/* ── Compare Score Breakdown & Platform Cards ── */
+/* ── Compare Score Breakdown & Platform Cards ── */
+.cc-formula-banner {
+  padding: 24px 26px;
+  background: var(--surf);
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  font-size: 15px;
+  line-height: 1.6;
+}
+.cc-formula-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin-top: 18px;
+}
+.cc-formula-card {
+  background: var(--surf2);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 18px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  transition: border-color .15s ease;
+}
+.cc-formula-card:hover {
+  border-color: rgba(255, 255, 255, 0.18);
+}
+.cc-formula-card-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 700;
+  font-size: 16px;
+  color: var(--you);
+}
+.cc-formula-card-num {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--you);
+  color: var(--on);
+  font-size: 13px;
+  font-weight: 800;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+.cc-formula-card-desc {
+  font-size: 14.5px;
+  color: var(--mute);
+  line-height: 1.6;
+  margin: 0;
+}
+.cc-formula-tag {
+  display: inline-block;
+  font-size: 13px;
+  padding: 4px 10px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--line);
+  color: var(--text);
+  margin-top: auto;
+  align-self: flex-start;
+}
+
+.cc-platform-matrix {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+}
+.cc-platform-card {
+  padding: 20px 22px;
+  background: var(--surf);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  transition: border-color .15s ease, background-color .15s ease;
+}
+.cc-platform-card:hover {
+  border-color: rgba(255, 255, 255, 0.18);
+}
+.cc-platform-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.cc-comp-platform-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+}
+.cc-comp-platform-icon-wrap {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--line);
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+.cc-comp-platform-icon-wrap img {
+  width: 22px;
+  height: 22px;
+  object-fit: contain;
+}
+.cc-comp-platform-name {
+  font-family: 'Bricolage Grotesque', 'DM Sans', sans-serif;
+  font-weight: 700;
+  font-size: 18px;
+  color: var(--text);
+  letter-spacing: -.02em;
+}
+
+.cc-status-pill {
+  font-size: 13px;
+  padding: 4px 10px;
+  border-radius: 99px;
+  font-weight: 600;
+  letter-spacing: .02em;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.cc-status-pill.connected {
+  background: rgba(198, 244, 50, 0.12);
+  color: var(--you);
+  border: 1px solid rgba(198, 244, 50, 0.3);
+}
+.cc-status-pill.missing {
+  background: rgba(154, 148, 136, 0.12);
+  color: var(--mute);
+  border: 1px solid rgba(154, 148, 136, 0.2);
+}
+
+.cc-score-row-duo {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+.cc-score-subcol {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px 18px;
+  border-radius: 14px;
+  background: var(--surf2);
+  border: 1px solid var(--line);
+  transition: border-color .15s ease;
+}
+.cc-score-subcol:hover {
+  border-color: rgba(255, 255, 255, 0.16);
+}
+.cc-platform-score-bar-track {
+  width: 100%;
+  height: 8px;
+  background: var(--h0);
+  border-radius: 99px;
+  overflow: hidden;
+  margin-top: 6px;
+}
+.cc-platform-score-bar-fill {
+  height: 100%;
+  border-radius: 99px;
+  transition: width .3s ease;
+}
+
+/* Detailed Composite Score Breakdown */
+.cc-score-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 14px;
+}
+.cc-score-summary-box {
+  padding: 20px 22px;
+  border-radius: 16px;
+  background: var(--surf2);
+  border: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  transition: border-color .15s ease;
+}
+.cc-score-summary-box:hover {
+  border-color: rgba(255, 255, 255, 0.16);
+}
+.cc-breakdown-row {
+  padding: 18px 20px;
+  background: var(--surf);
+  border-radius: 16px;
+  border: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  transition: border-color .15s ease;
+}
+.cc-breakdown-row:hover {
+  border-color: rgba(255, 255, 255, 0.18);
+}
+.cc-topic-pill-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+.cc-topic-pill {
+  font-size: 13px;
+  padding: 4px 10px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text);
+  border: 1px solid var(--line);
+}
+
+@media (max-width: 768px) {
+  .cc-formula-grid {
+    grid-template-columns: 1fr;
+  }
+  .cc-score-summary-grid {
+    grid-template-columns: 1fr;
+  }
+  .cc-score-row-duo {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+}
+
 
 
 

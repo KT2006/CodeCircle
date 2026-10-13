@@ -182,6 +182,11 @@ export const AuthProvider = ({ children }) => {
     setGoogleClientId('')
   }, [])
 
+  const updateUser = useCallback((updatedUser) => {
+    setUser(updatedUser)
+    if (updatedUser) cacheUser(updatedUser)
+  }, [])
+
   const value = useMemo(() => ({
     user,
     googleClientId,
@@ -191,7 +196,8 @@ export const AuthProvider = ({ children }) => {
     setError,
     signInWithGoogle,
     signOut,
-  }), [user, googleClientId, isLoading, isWakingUp, error, signInWithGoogle, signOut])
+    updateUser,
+  }), [user, googleClientId, isLoading, isWakingUp, error, signInWithGoogle, signOut, updateUser])
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }

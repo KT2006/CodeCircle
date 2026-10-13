@@ -77,6 +77,7 @@ export function toPublicUser(user) {
     id: user.id,
     email: user.email,
     name: user.name,
+    username: user.username ?? null,
     avatarUrl: user.avatar_url,
     includeContests: user.include_contests,
     createdAt: user.created_at,

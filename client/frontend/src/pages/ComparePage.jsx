@@ -1,14 +1,27 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../auth/useAuth'
+import leetcodeImg from '../assets/leetcode.png'
+import codeforcesImg from '../assets/codeforces.png'
+import codechefImg from '../assets/codechef.png'
+import atcoderImg from '../assets/atcoder.png'
+import geeksforgeeksImg from '../assets/geeksforgeeks.svg'
 
 const PLATFORMS = [
-  { key: 'leetcode',      label: 'LeetCode'      },
-  { key: 'codeforces',    label: 'Codeforces'    },
-  { key: 'codechef',      label: 'CodeChef'      },
-  { key: 'atcoder',       label: 'AtCoder'       },
-  { key: 'geeksforgeeks', label: 'GeeksForGeeks' },
+  { key: 'leetcode',      label: 'LeetCode',      icon: leetcodeImg },
+  { key: 'codeforces',    label: 'Codeforces',    icon: codeforcesImg },
+  { key: 'codechef',      label: 'CodeChef',      icon: codechefImg },
+  { key: 'atcoder',       label: 'AtCoder',       icon: atcoderImg },
+  { key: 'geeksforgeeks', label: 'GeeksForGeeks', icon: geeksforgeeksImg },
 ]
+
+const PLATFORM_COLORS = {
+  leetcode:      '#FFA116',
+  codeforces:    '#4A90E2',
+  codechef:      '#C28B5B',
+  atcoder:       '#9a9488',
+  geeksforgeeks: '#2F8D46',
+}
 
 const CATEGORIES = [
   { label: 'Composite Score', key: 'composite' },
@@ -17,15 +30,6 @@ const CATEGORIES = [
   { label: 'Contests',    key: 'cont'   },
   { label: 'Streak',      key: 'streak' },
   { label: 'Active days', key: 'days'   },
-]
-
-const DEFAULT_TOPICS = [
-  { name: 'Array',       you: 180, friend: 160 },
-  { name: 'String',      you: 110, friend: 125 },
-  { name: 'Math',        you: 95,  friend: 75  },
-  { name: 'Tree',        you: 85,  friend: 50  },
-  { name: 'Dynamic Prog', you: 70, friend: 85  },
-  { name: 'Graph',       you: 60,  friend: 40  },
 ]
 
 const ComparePage = () => {
@@ -41,8 +45,8 @@ const ComparePage = () => {
   const [error, setError] = useState(null)
   const [swapped, setSwapped] = useState(false)
   const [activeTab, setActiveTab] = useState('s') // 's': Score, 't': Topics, 'p': Plan
-  const [challengeSent, setChallengeSent] = useState(false)
   const [checkedPlan, setCheckedPlan] = useState({})
+  const [showExplainer, setShowExplainer] = useState(false)
 
   // Derive selected friend ID from searchParams or first available friend
   const selectedFriendId = searchParams.get('friend') || (friends[0]?.id ? String(friends[0].id) : '')
@@ -77,7 +81,6 @@ const ComparePage = () => {
     const fetchCompare = async () => {
       setLoading(true)
       setError(null)
-      setChallengeSent(false)
       try {
         const res = await fetch(`/api/compare?friendId=${selectedFriendId}`, { credentials: 'include' })
         const data = await res.json()
@@ -111,10 +114,14 @@ const ComparePage = () => {
       n: rawYou.displayName || user?.name || 'You',
       tag: 'You',
       ini: (rawYou.displayName || user?.name || 'K')[0].toUpperCase(),
-      sub: rawYou.bio || 'SRM IST · Active',
+      sub: rawYou.bio || 'Active coder',
       col: 'var(--you)',
       isYou: true,
       composite: Math.round(rawYou.compositeScore ?? 0),
+      rawComposite: rawYou.compositeScore ?? 0,
+      connectedScore: rawYou.connectedScore ?? null,
+      missingPlatforms: rawYou.missingPlatforms ?? [],
+      scoreBreakdown: rawYou.scoreBreakdown ?? null,
       streak: rawYou.streak ?? 0,
       prob: rawYou.problems ?? 0,
       cont: rawYou.contests ?? 0,
@@ -136,10 +143,14 @@ const ComparePage = () => {
       n: rawFriend.displayName,
       tag: 'Friend',
       ini: (rawFriend.displayName || 'F')[0].toUpperCase(),
-      sub: rawFriend.bio || 'Active',
+      sub: rawFriend.bio || 'Active coder',
       col: 'var(--foe)',
       isYou: false,
       composite: Math.round(rawFriend.compositeScore ?? 0),
+      rawComposite: rawFriend.compositeScore ?? 0,
+      connectedScore: rawFriend.connectedScore ?? null,
+      missingPlatforms: rawFriend.missingPlatforms ?? [],
+      scoreBreakdown: rawFriend.scoreBreakdown ?? null,
       streak: rawFriend.streak ?? 0,
       prob: rawFriend.problems ?? 0,
       cont: rawFriend.contests ?? 0,
@@ -194,11 +205,17 @@ const ComparePage = () => {
     return `${leader} by ${probDiff} problems and ${contDiff} contests. Compare platform breakdowns, topic radar, and consistency.`
   }, [youObj, friendObj])
 
-  // 6-Month Contest History labels & values
+  // 6-Month Contest History labels & values (dynamically derived)
   const monthLabels = useMemo(() => {
     if (youObj?.cmLabels?.length >= 6) return youObj.cmLabels.slice(0, 6)
     if (friendObj?.cmLabels?.length >= 6) return friendObj.cmLabels.slice(0, 6)
-    return ['May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct']
+    const labels = []
+    const now = new Date()
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
+      labels.push(d.toLocaleDateString('en-US', { month: 'short' }))
+    }
+    return labels
   }, [youObj, friendObj])
 
   const maxMonthCount = useMemo(() => {
@@ -206,25 +223,52 @@ const ComparePage = () => {
     return Math.max(...all, 4)
   }, [youObj, friendObj])
 
-  // Topic radar calculations
+  // Topic radar calculations (strictly dynamic from real sync data)
   const radarTopics = useMemo(() => {
-    if (compareData?.topicComparison && compareData.topicComparison.length >= 4) {
+    if (compareData?.topicComparison && compareData.topicComparison.length > 0) {
       return compareData.topicComparison.slice(0, 6).map(t => ({
         name: t.name,
         you: t.you ?? 0,
         friend: t.friend ?? 0,
       }))
     }
-    return DEFAULT_TOPICS
+    return []
   }, [compareData])
 
   const maxTopicVal = useMemo(() => {
+    if (radarTopics.length === 0) return 100
     const maxVal = Math.max(...radarTopics.map(t => Math.max(t.you, t.friend)))
     return maxVal > 0 ? maxVal : 100
   }, [radarTopics])
 
+  // Platform comparison data with connection status + scores
+  const platformComparison = useMemo(() => {
+    if (!compareData) return []
+    const youMissing = new Set(compareData.you?.missingPlatforms || [])
+    const friendMissing = new Set(compareData.friend?.missingPlatforms || [])
+    const youSolved = Object.fromEntries(
+      (compareData.you?.platformSolved || []).map(p => [p.key, p])
+    )
+    const friendSolved = Object.fromEntries(
+      (compareData.friend?.platformSolved || []).map(p => [p.key, p])
+    )
+    return PLATFORMS.map(({ key, label, icon }) => ({
+      key,
+      label,
+      icon,
+      color: PLATFORM_COLORS[key] || '#666',
+      youCount: youSolved[key]?.count ?? 0,
+      friendCount: friendSolved[key]?.count ?? 0,
+      youScore: compareData.you?.platformScores?.[key] ?? null,
+      friendScore: compareData.friend?.platformScores?.[key] ?? null,
+      youConnected: !youMissing.has(key),
+      friendConnected: !friendMissing.has(key),
+    }))
+  }, [compareData])
+
   // SVG Radar coordinates generator
   const radarData = useMemo(() => {
+    if (radarTopics.length === 0) return { rings: [], youPoints: '', friendPoints: '', labels: [] }
     const cx = 150
     const cy = 130
     const R = 84
@@ -248,7 +292,7 @@ const ComparePage = () => {
     return { rings, youPoints, friendPoints, labels }
   }, [radarTopics, maxTopicVal])
 
-  // Key Insights list
+  // Key Insights list (from backend or dynamically derived)
   const insightsList = useMemo(() => {
     if (compareData?.insights && compareData.insights.length > 0) {
       return compareData.insights.map(item => ({
@@ -265,14 +309,14 @@ const ComparePage = () => {
       items.push({
         id: 'p1',
         title: `You've solved ${pDiff} more problems`,
-        sub: 'You lead in total problems solved.',
+        sub: `Leading with ${youObj.prob} total problems solved across platforms.`,
         isYou: true,
       })
     } else {
       items.push({
         id: 'p1',
         title: `${friendObj.n} has solved ${Math.abs(pDiff)} more problems`,
-        sub: 'Focus on daily consistency to bridge the gap.',
+        sub: `Bridge the ${Math.abs(pDiff)} problem difference with regular solving.`,
         isYou: false,
       })
     }
@@ -282,35 +326,21 @@ const ComparePage = () => {
       items.push({
         id: 's1',
         title: `Your streak is ${sDiff} days longer`,
-        sub: 'Great consistency. Keep it up.',
+        sub: `${youObj.streak}-day streak is active and solid.`,
         isYou: true,
       })
     } else {
       items.push({
         id: 's1',
         title: `${friendObj.n}'s streak is ${Math.abs(sDiff)} days longer`,
-        sub: 'Solve 1 problem every day to build momentum.',
+        sub: `Solve 1 problem today to build your streak.`,
         isYou: false,
       })
     }
-
-    // Gaps in topics
-    radarTopics.forEach((t, i) => {
-      const diff = t.friend - t.you
-      if (diff > 10 && items.length < 5) {
-        items.push({
-          id: `top-${i}`,
-          title: `Gap in ${t.name}`,
-          sub: `${friendObj.n} has solved ${diff} more ${t.name} problems.`,
-          isYou: false,
-        })
-      }
-    })
-
     return items
-  }, [compareData, youObj, friendObj, radarTopics])
+  }, [compareData, youObj, friendObj])
 
-  // Plan items
+  // Plan items (from backend or dynamically derived)
   const planItems = useMemo(() => {
     if (compareData?.plan && compareData.plan.length > 0) {
       return compareData.plan.map(p => {
@@ -319,24 +349,26 @@ const ComparePage = () => {
       })
     }
     const plans = []
-    radarTopics.forEach(t => {
-      if (t.friend > t.you && plans.length < 3) {
-        plans.push(`Solve 5 ${t.name} problems this week`)
-      }
-    })
-    plans.push('Keep the daily streak active')
-    plans.push('Compete in the upcoming weekend contest')
+    if (radarTopics.length > 0) {
+      radarTopics.forEach(t => {
+        if (t.friend > t.you && plans.length < 3) {
+          plans.push(`Target ${t.name}: solve ~5 problems to bridge the gap with ${friendObj?.n}`)
+        }
+      })
+    }
+    if (youObj && friendObj && friendObj.prob > youObj.prob) {
+      plans.push(`Target ~${Math.max(1, Math.ceil((friendObj.prob - youObj.prob) / 60))} problems/day to catch up in 2 months`)
+    }
+    if (youObj?.streak === 0) {
+      plans.push('Solve at least 1 problem today to start an active streak')
+    } else {
+      plans.push(`Keep your active ${youObj?.streak}-day streak alive today`)
+    }
     return plans
-  }, [compareData, radarTopics])
+  }, [compareData, radarTopics, youObj, friendObj])
 
   const togglePlanCheck = (idx) => {
     setCheckedPlan(prev => ({ ...prev, [idx]: !prev[idx] }))
-  }
-
-  // Handle Challenge Button Click
-  const handleChallenge = () => {
-    setChallengeSent(true)
-    setTimeout(() => setChallengeSent(false), 4000)
   }
 
   return (
@@ -422,18 +454,73 @@ const ComparePage = () => {
             <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
               <button
                 type="button"
-                className="p"
-                onClick={handleChallenge}
-              >
-                {challengeSent ? 'Goal challenge sent! ✓' : `Challenge ${friendObj.n} to a weekly goal`}
-              </button>
-              <button
-                type="button"
                 onClick={() => setSwapped(s => !s)}
               >
                 Swap sides
               </button>
+              <button
+                type="button"
+                onClick={() => setShowExplainer(s => !s)}
+                style={{
+                  background: showExplainer ? 'rgba(198, 244, 50, 0.12)' : undefined,
+                  borderColor: showExplainer ? 'var(--you)' : undefined,
+                  color: showExplainer ? 'var(--you)' : undefined,
+                }}
+              >
+                {showExplainer ? 'Hide calculation details ▴' : 'How is composite score calculated? ⓘ'}
+              </button>
             </div>
+
+            {/* Formula Explainer Banner */}
+            {showExplainer && (
+              <div className="cc-formula-banner" style={{ marginTop: 16 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8, flexWrap: 'wrap' }}>
+                  <span className="chip" style={{ fontSize: 12, padding: '3px 10px', background: 'var(--you)', color: 'var(--on)' }}>
+                    Scoring Guide
+                  </span>
+                  <h3 className="brg" style={{ fontSize: 18, fontWeight: 700, margin: 0, color: 'var(--text)' }}>
+                    How CodeCircle Calculates Composite Scores
+                  </h3>
+                </div>
+                <p style={{ margin: '0 0 12px 0', fontSize: 14, color: 'var(--mute)', lineHeight: 1.6 }}>
+                  CodeCircle standardizes programming activity into a single 0–100 composite score across 5 platforms: LeetCode, Codeforces, CodeChef, AtCoder, and GeeksForGeeks. This normalizes varying rating ladders so you can compare multi-platform coders fairly.
+                </p>
+                <div className="cc-formula-grid">
+                  <div className="cc-formula-card">
+                    <div className="cc-formula-card-badge">
+                      <span className="cc-formula-card-num">1</span>
+                      <span>Platform Skill Score (0–100)</span>
+                    </div>
+                    <p className="cc-formula-card-desc">
+                      Solved problems are weighted by difficulty across 12 algorithmic patterns. A diminishing returns curve rewards consistent breadth and problem difficulty rather than sheer problem count spam.
+                    </p>
+                    <span className="cc-formula-tag">Difficulty-weighted · Pattern mastery</span>
+                  </div>
+
+                  <div className="cc-formula-card">
+                    <div className="cc-formula-card-badge">
+                      <span className="cc-formula-card-num">2</span>
+                      <span>Contest Performance (Optional)</span>
+                    </div>
+                    <p className="cc-formula-card-desc">
+                      Official contest ratings (e.g. Codeforces, LeetCode) are scaled to a 0–100 benchmark. When available, each platform blends 70% problem solving skill and 30% contest rating.
+                    </p>
+                    <span className="cc-formula-tag">70% Skill + 30% Rating blend</span>
+                  </div>
+
+                  <div className="cc-formula-card">
+                    <div className="cc-formula-card-badge">
+                      <span className="cc-formula-card-num">3</span>
+                      <span>Balanced Platform Weighting</span>
+                    </div>
+                    <p className="cc-formula-card-desc">
+                      Each platform contributes an equal 20% weight toward your composite score (max 100). Unconnected platforms contribute 0 pts to reward multi-platform versatility.
+                    </p>
+                    <span className="cc-formula-tag">20% weight per platform · Max 20 pts each</span>
+                  </div>
+                </div>
+              </div>
+            )}
           </section>
 
           {/* ── VS Row (pa VS pb) ── */}
@@ -555,7 +642,8 @@ const ComparePage = () => {
 
           {/* ── TAB 1: SCORE ── */}
           {activeTab === 's' && (
-            <div className="g">
+            <>
+              <div className="g">
               {/* Left Column: Category by category */}
               <div className="c">
                 <div className="hd">
@@ -713,10 +801,301 @@ const ComparePage = () => {
                 </div>
               </div>
             </div>
-          )}
 
-          {/* ── TAB 2: TOPICS ── */}
-          {activeTab === 't' && (
+            {/* ── Platform Breakdown & Coverage ── */}
+            <div className="c" style={{ marginTop: 12 }}>
+              <div className="hd">
+                <div>
+                  <h2>Platform Breakdown & Coverage</h2>
+                  <span className="m" style={{ fontSize: 15, marginTop: 4, display: 'inline-block' }}>
+                    Direct side-by-side comparison across all 5 platforms. Unconnected platforms contribute 0 to the composite score.
+                  </span>
+                </div>
+              </div>
+
+              <div className="cc-platform-matrix">
+                {platformComparison.map((p) => {
+                  const leftConnected = swapped ? p.friendConnected : p.youConnected
+                  const rightConnected = swapped ? p.youConnected : p.friendConnected
+                  const leftCount = swapped ? p.friendCount : p.youCount
+                  const rightCount = swapped ? p.youCount : p.friendCount
+                  const leftScore = swapped ? p.friendScore : p.youScore
+                  const rightScore = swapped ? p.youScore : p.friendScore
+                  const lScoreVal = leftScore ?? 0
+                  const rScoreVal = rightScore ?? 0
+                  const leftWins = lScoreVal > rScoreVal
+                  const rightWins = rScoreVal > lScoreVal
+                  const isTie = lScoreVal === rScoreVal && (leftConnected || rightConnected) && lScoreVal > 0
+
+                  return (
+                    <div className="cc-platform-card" key={p.key}>
+                      <div className="cc-platform-card-header">
+                        <div className="cc-comp-platform-title">
+                          <div className="cc-comp-platform-icon-wrap">
+                            <img src={p.icon} alt={p.label} />
+                          </div>
+                          <div>
+                            <span className="cc-comp-platform-name">{p.label}</span>
+                            <span className="m" style={{ fontSize: 14, marginLeft: 8 }}>
+                              20% composite weight
+                            </span>
+                          </div>
+                        </div>
+
+                        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                          {leftWins && (
+                            <span className="chip" style={{ fontSize: 13, padding: '4px 12px' }}>
+                              {leftSide.isYou ? 'You lead' : `${leftSide.n} leads`}
+                            </span>
+                          )}
+                          {rightWins && (
+                            <span className="chip f" style={{ fontSize: 13, padding: '4px 12px' }}>
+                              {rightSide.isYou ? 'You lead' : `${rightSide.n} leads`}
+                            </span>
+                          )}
+                          {isTie && (
+                            <span className="chip tie" style={{ fontSize: 13, padding: '4px 12px' }}>
+                              Tied
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="cc-score-row-duo">
+                        {/* Left Side */}
+                        <div className="cc-score-subcol">
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <span className="brg" style={{ fontSize: 18, fontWeight: 700, color: leftSide.col }}>
+                              {leftSide.n}
+                            </span>
+                            <span className={`cc-status-pill ${leftConnected ? 'connected' : 'missing'}`}>
+                              {leftConnected ? 'Connected' : 'Not connected'}
+                            </span>
+                          </div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 4 }}>
+                            <span className="m" style={{ fontSize: 15, fontWeight: 500 }}>Problems solved</span>
+                            <b className="mono" style={{ fontSize: 20 }}>{leftCount}</b>
+                          </div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                            <span className="m" style={{ fontSize: 15, fontWeight: 500 }}>Platform score</span>
+                            <b className="mono" style={{ fontSize: 22, color: leftConnected ? leftSide.col : 'var(--mute)' }}>
+                              {leftScore !== null ? Math.round(leftScore) : 0} <small className="m" style={{ fontSize: 14 }}>/ 100</small>
+                            </b>
+                          </div>
+                          <div className="cc-platform-score-bar-track">
+                            <div
+                              className="cc-platform-score-bar-fill"
+                              style={{
+                                width: `${Math.min(100, Math.max(0, leftScore !== null ? Math.round(leftScore) : 0))}%`,
+                                background: leftConnected ? leftSide.col : 'transparent',
+                              }}
+                            />
+                          </div>
+                        </div>
+
+                        {/* Right Side */}
+                        <div className="cc-score-subcol">
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <span className="brg" style={{ fontSize: 18, fontWeight: 700, color: rightSide.col }}>
+                              {rightSide.n}
+                            </span>
+                            <span className={`cc-status-pill ${rightConnected ? 'connected' : 'missing'}`}>
+                              {rightConnected ? 'Connected' : 'Not connected'}
+                            </span>
+                          </div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 4 }}>
+                            <span className="m" style={{ fontSize: 15, fontWeight: 500 }}>Problems solved</span>
+                            <b className="mono" style={{ fontSize: 20 }}>{rightCount}</b>
+                          </div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                            <span className="m" style={{ fontSize: 15, fontWeight: 500 }}>Platform score</span>
+                            <b className="mono" style={{ fontSize: 22, color: rightConnected ? rightSide.col : 'var(--mute)' }}>
+                              {rightScore !== null ? Math.round(rightScore) : 0} <small className="m" style={{ fontSize: 14 }}>/ 100</small>
+                            </b>
+                          </div>
+                          <div className="cc-platform-score-bar-track">
+                            <div
+                              className="cc-platform-score-bar-fill"
+                              style={{
+                                width: `${Math.min(100, Math.max(0, rightScore !== null ? Math.round(rightScore) : 0))}%`,
+                                background: rightConnected ? rightSide.col : 'transparent',
+                              }}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+
+            {/* ── Detailed Composite Score Breakdown ── */}
+            <div className="c" style={{ marginTop: 12 }}>
+              <div className="hd">
+                <div>
+                  <h2>Detailed Composite Score Breakdown</h2>
+                  <span className="m" style={{ fontSize: 15, marginTop: 4, display: 'inline-block' }}>
+                    Transparent breakdown of platform scores, contest blending, and contribution to composite score
+                  </span>
+                </div>
+              </div>
+
+              {/* Summary Cards */}
+              <div className="cc-score-summary-grid">
+                {/* Left Side Summary */}
+                <div className="cc-score-summary-box">
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <b className="brg" style={{ color: leftSide.col, fontSize: 19 }}>{leftSide.n}</b>
+                    <span className="chip" style={{ fontSize: 13, padding: '3px 10px', background: 'rgba(255,255,255,0.06)', color: 'var(--mute)', border: '1px solid var(--line)' }}>
+                      {leftSide.scoreBreakdown?.connectedCount ?? 0} of 5 connected
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginTop: 8 }}>
+                    <span className="m" style={{ fontSize: 15, fontWeight: 500 }}>Composite Score</span>
+                    <b className="mono" style={{ fontSize: 32, color: leftSide.col, letterSpacing: '-.03em' }}>
+                      {leftSide.composite}
+                      <small className="m" style={{ fontSize: 16, fontWeight: 400 }}> / 100</small>
+                    </b>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 15, marginTop: 4 }}>
+                    <span className="m">Pure Connected Score:</span>
+                    <b className="mono" style={{ fontSize: 18 }}>
+                      {leftSide.connectedScore !== null ? Math.round(leftSide.connectedScore) : leftSide.composite} / 100
+                    </b>
+                  </div>
+                  {leftSide.missingPlatforms?.length > 0 && (
+                    <div style={{ fontSize: 13.5, color: 'var(--mute)', marginTop: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span>⚠️</span>
+                      <span>{leftSide.missingPlatforms.length} unconnected platform(s) contribute 0 pts</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Right Side Summary */}
+                <div className="cc-score-summary-box">
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <b className="brg" style={{ color: rightSide.col, fontSize: 19 }}>{rightSide.n}</b>
+                    <span className="chip" style={{ fontSize: 13, padding: '3px 10px', background: 'rgba(255,255,255,0.06)', color: 'var(--mute)', border: '1px solid var(--line)' }}>
+                      {rightSide.scoreBreakdown?.connectedCount ?? 0} of 5 connected
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginTop: 8 }}>
+                    <span className="m" style={{ fontSize: 15, fontWeight: 500 }}>Composite Score</span>
+                    <b className="mono" style={{ fontSize: 32, color: rightSide.col, letterSpacing: '-.03em' }}>
+                      {rightSide.composite}
+                      <small className="m" style={{ fontSize: 16, fontWeight: 400 }}> / 100</small>
+                    </b>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 15, marginTop: 4 }}>
+                    <span className="m">Pure Connected Score:</span>
+                    <b className="mono" style={{ fontSize: 18 }}>
+                      {rightSide.connectedScore !== null ? Math.round(rightSide.connectedScore) : rightSide.composite} / 100
+                    </b>
+                  </div>
+                  {rightSide.missingPlatforms?.length > 0 && (
+                    <div style={{ fontSize: 13.5, color: 'var(--mute)', marginTop: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span>⚠️</span>
+                      <span>{rightSide.missingPlatforms.length} unconnected platform(s) contribute 0 pts</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Platform Contribution Breakdown List */}
+              <div style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 14 }}>
+                {PLATFORMS.map(({ key, label, icon }) => {
+                  const leftPlat = leftSide.scoreBreakdown?.platforms?.find(p => p.key === key)
+                  const rightPlat = rightSide.scoreBreakdown?.platforms?.find(p => p.key === key)
+                  const leftContribution = leftPlat?.connected && leftPlat?.platformScore !== null
+                    ? (leftPlat.platformScore * 0.20).toFixed(1)
+                    : '0.0'
+                  const rightContribution = rightPlat?.connected && rightPlat?.platformScore !== null
+                    ? (rightPlat.platformScore * 0.20).toFixed(1)
+                    : '0.0'
+
+                  return (
+                    <div className="cc-breakdown-row" key={key}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
+                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 12 }}>
+                          <div className="cc-comp-platform-icon-wrap" style={{ width: 34, height: 34 }}>
+                            <img src={icon} alt={label} style={{ width: 20, height: 20 }} />
+                          </div>
+                          <span className="brg" style={{ fontWeight: 700, fontSize: 18, color: 'var(--text)' }}>
+                            {label}
+                          </span>
+                        </div>
+                        <span className="chip" style={{ fontSize: 13, padding: '4px 12px', background: 'rgba(255, 255, 255, 0.06)', color: 'var(--text)', border: '1px solid var(--line)' }}>
+                          20% weight · max 20.0 pts
+                        </span>
+                      </div>
+
+                      <div className="cc-score-row-duo">
+                        {/* Left Side Platform Detail */}
+                        <div className="cc-score-subcol">
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <span className="brg" style={{ fontSize: 17, fontWeight: 700, color: leftSide.col }}>{leftSide.n}</span>
+                            <span className="mono" style={{ fontSize: 16, fontWeight: 700, color: leftPlat?.connected ? leftSide.col : 'var(--mute)' }}>
+                              +{leftContribution} pts
+                            </span>
+                          </div>
+                          <div style={{ fontSize: 15, color: leftPlat?.connected ? 'var(--text)' : 'var(--mute)', lineHeight: 1.5 }}>
+                            {leftPlat?.calculationText || (leftPlat?.connected ? `${Math.round(leftPlat.platformScore)} platform pts` : 'Not connected (0 pts)')}
+                          </div>
+                          {leftPlat?.topTopics && leftPlat.topTopics.length > 0 && (
+                            <div className="cc-topic-pill-list">
+                              {leftPlat.topTopics.slice(0, 3).map(t => (
+                                <span className="cc-topic-pill" key={t.tag}>
+                                  {t.tag}: <b style={{ color: leftSide.col }}>{Math.round(t.mastery)}%</b>
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Right Side Platform Detail */}
+                        <div className="cc-score-subcol">
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <span className="brg" style={{ fontSize: 17, fontWeight: 700, color: rightSide.col }}>{rightSide.n}</span>
+                            <span className="mono" style={{ fontSize: 16, fontWeight: 700, color: rightPlat?.connected ? rightSide.col : 'var(--mute)' }}>
+                              +{rightContribution} pts
+                            </span>
+                          </div>
+                          <div style={{ fontSize: 15, color: rightPlat?.connected ? 'var(--text)' : 'var(--mute)', lineHeight: 1.5 }}>
+                            {rightPlat?.calculationText || (rightPlat?.connected ? `${Math.round(rightPlat.platformScore)} platform pts` : 'Not connected (0 pts)')}
+                          </div>
+                          {rightPlat?.topTopics && rightPlat.topTopics.length > 0 && (
+                            <div className="cc-topic-pill-list">
+                              {rightPlat.topTopics.slice(0, 3).map(t => (
+                                <span className="cc-topic-pill" key={t.tag}>
+                                  {t.tag}: <b style={{ color: rightSide.col }}>{Math.round(t.mastery)}%</b>
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          </>
+        )}
+
+        {/* ── TAB 2: TOPICS ── */}
+        {activeTab === 't' && (
+          radarTopics.length === 0 ? (
+            <div className="c" style={{ textAlign: 'center', padding: '48px 20px' }}>
+              <h3 style={{ marginBottom: 8, fontSize: 18 }}>No common topic data yet</h3>
+              <p className="m" style={{ maxWidth: 460, margin: '0 auto 16px', fontSize: 14 }}>
+                Topic radar requires tagged problem data from platforms that classify problems by topics (such as Codeforces, LeetCode, and GeeksForGeeks).
+              </p>
+              <div className="m" style={{ fontSize: 13 }}>
+                Connect your accounts and sync problem history to view topic radar comparisons.
+              </div>
+            </div>
+          ) : (
             <div className="g g-even">
               {/* Left Column: Topic Radar SVG */}
               <div className="c">
@@ -812,7 +1191,8 @@ const ComparePage = () => {
                 </div>
               </div>
             </div>
-          )}
+          )
+        )}
 
           {/* ── TAB 3: PLAN ── */}
           {activeTab === 'p' && (
