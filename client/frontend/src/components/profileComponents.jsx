@@ -73,6 +73,29 @@ export const getCurrentStreak = (activityByDate = {}) => {
   return streak
 }
 
+/**
+ * Scans the full activityByDate map and returns the longest consecutive
+ * run of days with any activity (combined across all platforms).
+ */
+export const getLongestStreak = (activityByDate = {}) => {
+  const days = Object.keys(activityByDate)
+    .filter(k => activityByDate[k] > 0 && /^\d{4}-\d{2}-\d{2}$/.test(k))
+    .sort()
+  if (days.length === 0) return 0
+  let best = 1, run = 1
+  for (let i = 1; i < days.length; i++) {
+    const prev = new Date(`${days[i - 1]}T00:00:00.000Z`)
+    prev.setUTCDate(prev.getUTCDate() + 1)
+    if (prev.toISOString().slice(0, 10) === days[i]) {
+      run++
+      if (run > best) best = run
+    } else {
+      run = 1
+    }
+  }
+  return best
+}
+
 export const countActiveDays = (activityByDate = {}) =>
   Object.values(activityByDate).filter(v => v > 0).length
 
@@ -725,24 +748,75 @@ export const UP_NEXT = [
   { title: 'Number of Islands',  difficulty: 'Medium', tags: ['Graph'], url: 'https://leetcode.com/problems/number-of-islands/' },
 ]
 
-// ─── Ring (streak progress SVG) ───────────────────────────────────────────────
-const CIRC = 2 * Math.PI * 34
+// ─── StreakCard ────────────────────────────────────────────────────────────────
+// Shows current streak and all-time longest streak. Fully responsive.
+export const StreakCard = ({ currentStreak = 0, longestStreak = 0 }) => {
+  const pct = longestStreak > 0 ? Math.min(currentStreak / longestStreak, 1) : 0
+  const CIRC = 2 * Math.PI * 34
+  const offset = CIRC * (1 - pct)
+  const isOnFire = currentStreak >= 7
 
-export const Ring = ({ pct = 0 }) => {
-  const offset = CIRC * (1 - Math.min(pct, 1))
   return (
-    <svg width="68" height="68" viewBox="0 0 84 84" aria-hidden="true">
-      <circle cx="42" cy="42" r="34" fill="none" stroke={V.h0} strokeWidth="9" />
-      <circle
-        cx="42" cy="42" r="34" fill="none"
-        stroke={V.you} strokeWidth="9"
-        strokeLinecap="round"
-        strokeDasharray={CIRC}
-        strokeDashoffset={offset}
-        transform="rotate(-90 42 42)"
-        style={{ transition: 'stroke-dashoffset .6s' }}
-      />
-    </svg>
+    <section style={{ ...card, padding: '20px', display: 'flex', flexDirection: 'column', gap: 20, height: '100%', boxSizing: 'border-box' }}>
+      {/* ── Title ── */}
+      <h2 style={{ ...brg, fontSize: 16, fontWeight: 700, margin: 0, color: V.mute, textTransform: 'uppercase', letterSpacing: '.06em', fontSize: 12 }}>Streak</h2>
+
+      {/* ── Two stat cells ── */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+        {/* Current */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <span style={{ fontSize: 12, color: V.mute }}>Current</span>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, flexWrap: 'wrap' }}>
+            <span style={{ ...brg, fontSize: 'clamp(28px, 5vw, 40px)', fontWeight: 800, lineHeight: 1, color: isOnFire ? V.hot : V.you }}>
+              {currentStreak}
+            </span>
+            <span style={{ fontSize: 14, color: V.mute, fontWeight: 500 }}>
+              day{currentStreak !== 1 ? 's' : ''}
+            </span>
+            {isOnFire && <span style={{ fontSize: 18, lineHeight: 1 }}>🔥</span>}
+          </div>
+          <span style={{ fontSize: 12, color: V.mute }}>
+            {currentStreak === 0 ? 'No active streak' : currentStreak === 1 ? 'Started today' : 'consecutive days'}
+          </span>
+        </div>
+
+        {/* Longest */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <span style={{ fontSize: 12, color: V.mute }}>Longest</span>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, flexWrap: 'wrap' }}>
+            <span style={{ ...brg, fontSize: 'clamp(28px, 5vw, 40px)', fontWeight: 800, lineHeight: 1, color: V.text }}>
+              {longestStreak}
+            </span>
+            <span style={{ fontSize: 14, color: V.mute, fontWeight: 500 }}>
+              day{longestStreak !== 1 ? 's' : ''}
+            </span>
+          </div>
+          <span style={{ fontSize: 12, color: V.mute }}>all-time best</span>
+        </div>
+      </div>
+
+      {/* ── Progress bar: current vs longest ── */}
+      <div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: V.mute, marginBottom: 6 }}>
+          <span>Progress to longest</span>
+          <span style={{ ...mono, color: longestStreak > 0 ? V.you : V.mute }}>
+            {longestStreak > 0 ? `${Math.round(pct * 100)}%` : '—'}
+          </span>
+        </div>
+        <div style={{ height: 6, borderRadius: 99, background: V.h0, overflow: 'hidden' }}>
+          <div style={{
+            height: '100%',
+            width: `${pct * 100}%`,
+            borderRadius: 99,
+            background: pct >= 1 ? V.hot : V.you,
+            transition: 'width .5s cubic-bezier(.4,0,.2,1)',
+          }} />
+        </div>
+        {pct >= 1 && (
+          <p style={{ marginTop: 6, fontSize: 12, color: V.hot, fontWeight: 600 }}>🏆 New record!</p>
+        )}
+      </div>
+    </section>
   )
 }
 

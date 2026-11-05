@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth/useAuth'
 import AddFriendModal from '../components/friends/AddFriendModal'
+import { getCurrentStreak } from '../components/profileComponents'
 import leetcodeImg from '../assets/leetcode.png'
 import codeforcesImg from '../assets/codeforces.png'
 import codechefImg from '../assets/codechef.png'
@@ -52,39 +53,17 @@ const formatAgo = (d) => {
 
 const computeUserStats = (profiles = {}) => {
   let solved = 0
-  let directStreak = 0
   const combinedActivity = {}
 
   for (const p of Object.values(profiles)) {
     if (!p) continue
     solved += p.problemsSolved ?? 0
-    const st = p.currentStreak ?? p.streak ?? 0
-    if (st > directStreak) directStreak = st
-
     for (const [day, count] of Object.entries(p.activityByDate ?? {})) {
-      if (count > 0) {
-        combinedActivity[day] = (combinedActivity[day] ?? 0) + count
-      }
+      if (count > 0) combinedActivity[day] = (combinedActivity[day] ?? 0) + count
     }
   }
 
-  // Calculate streak from combinedActivity across all platforms
-  const todayKey = new Date().toISOString().slice(0, 10)
-  const yday = new Date(`${todayKey}T00:00:00.000Z`)
-  yday.setUTCDate(yday.getUTCDate() - 1)
-  let key = combinedActivity[todayKey] ? todayKey : yday.toISOString().slice(0, 10)
-  let activityStreak = 0
-  while (combinedActivity[key]) {
-    activityStreak++
-    const prev = new Date(`${key}T00:00:00.000Z`)
-    prev.setUTCDate(prev.getUTCDate() - 1)
-    key = prev.toISOString().slice(0, 10)
-  }
-
-  return {
-    solved,
-    streak: Math.max(directStreak, activityStreak),
-  }
+  return { solved, streak: getCurrentStreak(combinedActivity) }
 }
 
 const FriendsPage = () => {

@@ -112,6 +112,36 @@ export async function fetchProfile(rawHandle) {
     throw new ParseError('CodeChef profile is missing its current rating')
   }
 
+  // Build activityByDate from contest participation dates.
+  // CodeChef does not expose a per-day submission heatmap via public HTML,
+  // so we use contest dates as the activity signal (1 per contest day).
+  const activityByDate = {}
+  for (const contest of contestHistory) {
+    if (!contest.date) continue
+    const day = contest.date.slice(0, 10)
+    if (/^\d{4}-\d{2}-\d{2}$/.test(day)) {
+      activityByDate[day] = (activityByDate[day] ?? 0) + 1
+    }
+  }
+
+  // Compute streak from the derived activity map
+  function computeStreak(map) {
+    const today = new Date()
+    const todayKey = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()))
+      .toISOString().slice(0, 10)
+    const yday = new Date(`${todayKey}T00:00:00.000Z`)
+    yday.setUTCDate(yday.getUTCDate() - 1)
+    let key = map[todayKey] ? todayKey : yday.toISOString().slice(0, 10)
+    let streak = 0
+    while (map[key]) {
+      streak++
+      const prev = new Date(`${key}T00:00:00.000Z`)
+      prev.setUTCDate(prev.getUTCDate() - 1)
+      key = prev.toISOString().slice(0, 10)
+    }
+    return streak
+  }
+
   return {
     platform: 'codechef',
     username,
@@ -122,8 +152,8 @@ export async function fetchProfile(rawHandle) {
     contestsAttended: contestRecords.length,
     contestHistory,
     topics: [],
-    activityByDate: {},
-    activityAvailable: false,
-    currentStreak: null,
+    activityByDate,
+    activityAvailable: Object.keys(activityByDate).length > 0,
+    currentStreak: computeStreak(activityByDate),
   }
 }

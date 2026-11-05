@@ -1,5 +1,29 @@
 import pool from '../db/pool.js'
+import env from '../config/env.js'
 import { scoreProfile, normalizeTag } from '../scoring/index.js'
+
+/**
+ * Compute the longest consecutive run of active days from an activityByDate map.
+ * Mirrors the frontend getLongestStreak — single source of logic on the server.
+ */
+function computeLongestStreak(activityByDate = {}) {
+  const days = Object.keys(activityByDate)
+    .filter(k => activityByDate[k] > 0 && /^\d{4}-\d{2}-\d{2}$/.test(k))
+    .sort()
+  if (days.length === 0) return 0
+  let best = 1, run = 1
+  for (let i = 1; i < days.length; i++) {
+    const prev = new Date(`${days[i - 1]}T00:00:00.000Z`)
+    prev.setUTCDate(prev.getUTCDate() + 1)
+    if (prev.toISOString().slice(0, 10) === days[i]) {
+      run++
+      if (run > best) best = run
+    } else {
+      run = 1
+    }
+  }
+  return best
+}
 
 const toInteger = (value) => {
   if (value === null || value === undefined || value === '') return null
@@ -197,16 +221,20 @@ async function saveProfile(profile, linkedUserId = null) {
       )
     }
 
+    const newLongestStreak = computeLongestStreak(profile.activityByDate ?? {})
+
     await client.query(
       `UPDATE platform_accounts
        SET latest_snapshot_id = $2,
            last_synced_at = now(),
+           next_refresh_allowed_at = now() + (interval '1 minute' * $3),
            status = 'idle',
            status_updated_at = now(),
            consecutive_failures = 0,
-           last_error = NULL
+           last_error = NULL,
+           longest_streak = GREATEST(longest_streak, $4)
        WHERE id = $1`,
-      [accountId, snapshotId],
+      [accountId, snapshotId, env.REFRESH_COOLDOWN_MINUTES, newLongestStreak],
     )
 
     await client.query('COMMIT')
@@ -229,8 +257,9 @@ export async function saveFriendProfile(profile) {
 
 export async function getSavedProfiles(userId) {
   const { rows } = await pool.query(
-    `SELECT pa.platform, pa.display_handle, pa.last_synced_at, s.raw_meta,
-            s.skill_score, s.contest_score, s.score_version
+    `SELECT pa.platform, pa.display_handle, pa.last_synced_at, pa.next_refresh_allowed_at,
+            pa.longest_streak,
+            s.raw_meta, s.skill_score, s.contest_score, s.score_version
      FROM user_accounts ua
      JOIN platform_accounts pa ON pa.id = ua.platform_account_id
      JOIN account_snapshots s ON s.id = pa.latest_snapshot_id
@@ -246,6 +275,8 @@ export async function getSavedProfiles(userId) {
       username: row.display_handle,
       platform: row.platform,
       lastSyncedAt: row.last_synced_at,
+      nextRefreshAllowedAt: row.next_refresh_allowed_at,
+      longestStreak: row.longest_streak ? Number(row.longest_streak) : 0,
       skillScore: row.skill_score ? Number(row.skill_score) : null,
       contestScore: row.contest_score ? Number(row.contest_score) : null,
       scoreVersion: row.score_version,

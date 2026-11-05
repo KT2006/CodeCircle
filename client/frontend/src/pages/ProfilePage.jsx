@@ -4,15 +4,15 @@ import { useAuth } from '../auth/useAuth'
 import { useSync } from '../context/SyncContext'
 import {
   V, card, brg, mono, btnBase, btnPrimary,
-  PLATFORMS, RATING_PLATFORMS, RATING_KEY, UP_NEXT,
-  fmt, utcToday, getRelativeTime,
-  getCurrentStreak, countActiveDays, sumActivityDays,
+  PLATFORMS, RATING_KEY, UP_NEXT,
+  fmt, getRelativeTime,
+  getCurrentStreak, getLongestStreak, countActiveDays, sumActivityDays,
   buildTopics, buildRecentContests, buildFeed, buildRatingSeries,
   ratingYAxis, ratingXTicks,
   HeatmapCard, StatBox, PlatformBar,
   TopicsCard, TopicRadarCard, ContestsCard,
   SubmissionsCard, FeedCard, DistributionCard, RatingTrendSection,
-  Ring, EditHandlesModal, HandlesPanel,
+  StreakCard, EditHandlesModal, HandlesPanel,
 } from '../components/profileComponents'
 
 // ─── Tab bar ──────────────────────────────────────────────────────────────────
@@ -39,6 +39,7 @@ const ProfilePage = () => {
 
   const [profiles, setProfiles] = useState({ leetcode: null, codeforces: null, codechef: null, atcoder: null, geeksforgeeks: null })
   const [lastSyncedAt,  setLastSyncedAt]  = useState(null)
+  const [cooldownRemainingSeconds, setCooldownRemainingSeconds] = useState(0)
   const [fetchError,    setFetchError]    = useState(null)
   const [showEditModal, setShowEditModal] = useState(false)
   const [isSaving,      setIsSaving]      = useState(false)
@@ -48,9 +49,24 @@ const ProfilePage = () => {
   const [topicMode,     setTopicMode]     = useState('p')
   const [copiedLink,    setCopiedLink]    = useState(false)
 
-  const [goalCount] = useState(() => { try { const g = +localStorage.getItem('cc-goal'); return g >= 1 && g <= 99 ? g : 3 } catch { return 3 } })
-  const [goalUntil] = useState(() => { try { const u = localStorage.getItem('cc-until'); return /^\d{4}-\d{2}$/.test(u ?? '') ? u : '2027-03' } catch { return '2027-03' } })
-  const [solved, setSolved] = useState(0)
+  // (goal state removed)
+
+  // ── Cooldown ticker ──
+  const hasCooldown = cooldownRemainingSeconds > 0
+  useEffect(() => {
+    if (!hasCooldown) return
+    const interval = setInterval(() => {
+      setCooldownRemainingSeconds((prev) => (prev <= 1 ? 0 : prev - 1))
+    }, 1000)
+    return () => clearInterval(interval)
+  }, [hasCooldown])
+
+  const formatCooldown = (totalSec) => {
+    if (totalSec <= 0) return ''
+    const mins = Math.floor(totalSec / 60)
+    const secs = totalSec % 60
+    return `${mins}:${secs < 10 ? '0' : ''}${secs}`
+  }
 
   // ── Load ──
   useEffect(() => {
@@ -63,6 +79,13 @@ const ProfilePage = () => {
         setProfiles(curr => ({ ...curr, ...saved }))
         const latestSync = Object.values(saved).map(p => new Date(p.lastSyncedAt)).filter(d => Number.isFinite(d.getTime())).sort((a,b) => b-a)[0]
         if (latestSync) setLastSyncedAt(latestSync)
+
+        if (typeof data.cooldownRemainingSeconds === 'number') {
+          setCooldownRemainingSeconds(data.cooldownRemainingSeconds)
+        } else if (latestSync) {
+          const diff = Math.max(0, Math.ceil((new Date(latestSync).getTime() + 15 * 60 * 1000 - Date.now()) / 1000))
+          setCooldownRemainingSeconds(diff)
+        }
       })
       .catch(err => { if (!cancelled) setFetchError(err.message) })
     return () => { cancelled = true }
@@ -71,12 +94,23 @@ const ProfilePage = () => {
   // ── Refresh ──
   const handleRefresh = () => {
     const connected = Object.entries(profiles).filter(([,p]) => p?.username).map(([plat,p]) => [plat, p.username])
-    if (!connected.length || syncState.isSyncing) return
+    if (!connected.length || syncState.isSyncing || cooldownRemainingSeconds > 0) return
     setFetchError(null)
     syncUserProfile({
       handles: Object.fromEntries(connected),
-      onProfileUpdated: (platform, profile) => { setProfiles(curr => ({ ...curr, [platform]: profile })); setLastSyncedAt(new Date()) },
-      onComplete: summary => { if (summary.failed > 0 && summary.succeeded === 0) setFetchError('Failed to refresh platform profiles') },
+      onProfileUpdated: (platform, profile) => {
+        setProfiles(curr => ({ ...curr, [platform]: profile }))
+        const now = new Date()
+        setLastSyncedAt(now)
+      },
+      onComplete: summary => {
+        if (summary.failed > 0 && summary.succeeded === 0) {
+          setFetchError('Failed to refresh platform profiles')
+        } else {
+          // Sync succeeded: enforce 15-minute cooldown (900 seconds)
+          setCooldownRemainingSeconds(15 * 60)
+        }
+      },
     })
   }
 
@@ -89,8 +123,17 @@ const ProfilePage = () => {
     setShowEditModal(false); setIsSaving(false)
     syncUserProfile({
       handles: toFetch,
-      onProfileUpdated: (platform, profile) => { setProfiles(curr => ({ ...curr, [platform]: profile })); setLastSyncedAt(new Date()) },
-      onComplete: summary => { if (summary.failed > 0 && summary.succeeded === 0) setFetchError('Could not fetch any platform profiles. Check the handles and try again.') },
+      onProfileUpdated: (platform, profile) => {
+        setProfiles(curr => ({ ...curr, [platform]: profile }))
+        setLastSyncedAt(new Date())
+      },
+      onComplete: summary => {
+        if (summary.failed > 0 && summary.succeeded === 0) {
+          setFetchError('Could not fetch any platform profiles. Check the handles and try again.')
+        } else {
+          setCooldownRemainingSeconds(15 * 60)
+        }
+      },
     })
   }
 
@@ -107,11 +150,21 @@ const ProfilePage = () => {
     return map
   }, [connectedProfiles])
 
-  const currentStreak = useMemo(() => {
-    const actStreak    = getCurrentStreak(combinedActivity)
-    const directStreak = connectedProfiles.reduce((best,p) => { const s = p.currentStreak ?? p.streak ?? 0; return s > best ? s : best }, 0)
-    return Math.max(actStreak, directStreak)
-  }, [combinedActivity, connectedProfiles])
+  const currentStreak = useMemo(
+    () => getCurrentStreak(combinedActivity),
+    [combinedActivity],
+  )
+
+  const longestStreak = useMemo(() => {
+    // Use the DB-persisted high-watermark (updated on every sync via GREATEST).
+    // Fall back to recomputing from the activity window only if the column is 0,
+    // which happens for rows that existed before migration 013.
+    const dbMax = connectedProfiles.reduce(
+      (best, p) => Math.max(best, p.longestStreak ?? 0),
+      0,
+    )
+    return dbMax > 0 ? dbMax : getLongestStreak(combinedActivity)
+  }, [connectedProfiles, combinedActivity])
 
   const totalActiveDays = useMemo(() => countActiveDays(combinedActivity), [combinedActivity])
   const last30          = useMemo(() => sumActivityDays(combinedActivity, 30), [combinedActivity])
@@ -126,16 +179,6 @@ const ProfilePage = () => {
   const ratingTicks   = useMemo(() => ratingXTicks(ratingData), [ratingData])
 
   const syncLabel = getRelativeTime(lastSyncedAt)
-
-  // Goal helpers
-  const MN = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
-  const fmtUntil = () => { const [y,m] = goalUntil.split('-'); return `${MN[+m-1]} ${y}` }
-  const daysLeft = () => { const [y,m] = goalUntil.split('-'); const end = new Date(+y,+m,0); end.setHours(0,0,0,0); const now = new Date(); now.setHours(0,0,0,0); return Math.round((end-now)/864e5) }
-  const dl        = daysLeft()
-  const goalExpired = dl < 0
-  const goalDone    = solved >= goalCount
-  const goalCopy    = goalExpired ? `Ended ${fmtUntil()}. Pick a new month.` : goalDone ? `Goal reached · ${dl} day${dl===1?'':'s'} left.` : `${solved} of ${goalCount} done · ${dl} day${dl===1?'':'s'} left.`
-  const ringPct     = goalCount > 0 ? solved / goalCount : 0
 
   const copyShareLink = () => {
     if (!user?.username) return
@@ -174,15 +217,56 @@ const ProfilePage = () => {
               </>
             )}
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 14, alignItems: 'center' }}>
-              <button type="button" onClick={handleRefresh} disabled={!hasData || syncState.isSyncing}
-                style={{ ...btnPrimary, padding: '8px 18px', display: 'inline-flex', alignItems: 'center', gap: 7, opacity: (!hasData || syncState.isSyncing) ? 0.6 : 1 }}>
-                <svg style={{ width: 14, height: 14, animation: syncState.isSyncing ? 'cc-spin 0.85s linear infinite' : 'none' }}
-                  viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" /><path d="M3 3v5h5" />
-                  <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16" /><path d="M16 21h5v-5" />
-                </svg>
-                {syncState.isSyncing ? 'Syncing…' : 'Refresh data'}
-              </button>
+              {(() => {
+                const isCoolingDown = cooldownRemainingSeconds > 0
+                const isRefreshDisabled = !hasData || syncState.isSyncing || isCoolingDown
+
+                return (
+                  <button
+                    type="button"
+                    onClick={handleRefresh}
+                    disabled={isRefreshDisabled}
+                    title={isCoolingDown ? `Refresh is on a 15-minute cooldown. Available in ${formatCooldown(cooldownRemainingSeconds)}.` : undefined}
+                    style={{
+                      ...btnPrimary,
+                      padding: '8px 18px',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 7,
+                      opacity: isRefreshDisabled ? 0.6 : 1,
+                      cursor: isRefreshDisabled ? 'not-allowed' : 'pointer',
+                      background: isCoolingDown ? 'var(--surf2)' : V.you,
+                      color: isCoolingDown ? 'var(--text)' : V.on,
+                      borderColor: isCoolingDown ? 'var(--line)' : V.you,
+                      transition: 'all 0.2s ease',
+                    }}
+                  >
+                    <svg
+                      style={{
+                        width: 14,
+                        height: 14,
+                        animation: syncState.isSyncing ? 'cc-spin 0.85s linear infinite' : 'none',
+                      }}
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2.4"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+                      <path d="M3 3v5h5" />
+                      <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16" />
+                      <path d="M16 21h5v-5" />
+                    </svg>
+                    {syncState.isSyncing
+                      ? 'Syncing…'
+                      : isCoolingDown
+                      ? `Refresh in ${formatCooldown(cooldownRemainingSeconds)}`
+                      : 'Refresh data'}
+                  </button>
+                )
+              })()}
               <button type="button" onClick={() => navigate('/compare')} style={{ ...btnBase, padding: '8px 18px' }}>
                 Compare with a friend
               </button>
@@ -198,32 +282,8 @@ const ProfilePage = () => {
             {fetchError && <p role="alert" style={{ marginTop: 8, fontSize: 12, color: V.hot }}>{fetchError}</p>}
           </section>
 
-          {/* Streak + Goal */}
-          <section style={{ ...card, padding: '16px 20px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-              <div>
-                <div style={{ color: V.mute, fontSize: 13 }}>Current streak</div>
-                <div style={{ ...brg, fontSize: 36, lineHeight: 1, fontWeight: 800, color: V.hot, marginTop: 2 }}>
-                  {currentStreak}<span style={{ fontSize: 18 }}> day{currentStreak !== 1 ? 's' : ''}</span>
-                </div>
-              </div>
-              <Ring pct={ringPct} />
-            </div>
-            <div style={{ marginTop: 8, display: 'grid', gap: 2 }}>
-              <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px 6px', flexWrap: 'wrap' }}>
-                <span style={{ fontWeight: 700, fontSize: 14 }}>Today's goal</span>
-                <span style={{ ...mono, ...brg, fontSize: 18, fontWeight: 800, letterSpacing: '-.04em' }}>{goalCount}</span>
-                <span style={{ color: V.mute, fontSize: 13 }}>{goalCount === 1 ? 'problem' : 'problems'}</span>
-              </div>
-              <div style={{ color: V.mute, fontSize: 13 }}>until <strong style={{ color: V.text }}>{fmtUntil()}</strong></div>
-              <div style={{ color: V.mute, fontSize: 12 }}>{goalCopy}</div>
-            </div>
-            <button type="button" disabled={goalExpired || goalDone}
-              onClick={() => { if (goalExpired || goalDone) return; setSolved(s => s+1) }}
-              style={{ ...btnPrimary, width: '100%', marginTop: 10, padding: '10px 18px', fontSize: 14, opacity: (goalExpired || goalDone) ? 0.5 : 1 }}>
-              {goalExpired ? 'Window ended' : goalDone ? 'Done for today ✓' : 'Log a solve'}
-            </button>
-          </section>
+          {/* Streak */}
+          <StreakCard currentStreak={currentStreak} longestStreak={longestStreak} />
         </div>
 
         {/* Right: Handles */}

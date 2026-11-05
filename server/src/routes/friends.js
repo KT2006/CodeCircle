@@ -248,7 +248,10 @@ function buildFriendSummary(row) {
     }
   }
 
-  // streak: derive from combined activityByDate across handles or best platform currentStreak
+  // streak: derive from combined activityByDate across all handles.
+  // Do NOT use raw_meta.currentStreak — that value is stale (saved at last sync
+  // time) and will show a non-zero streak even when the user hasn't solved
+  // anything in weeks. The activity map is always the source of truth.
   const combinedActivity = {}
   for (const h of handles) {
     const act = h.snapshot?.raw_meta?.activityByDate ?? {}
@@ -259,14 +262,7 @@ function buildFriendSummary(row) {
     }
   }
 
-  const directStreak = handles.reduce((best, h) => {
-    const raw = h.snapshot?.raw_meta
-    if (!raw) return best
-    const s = raw.currentStreak ?? raw.streak ?? 0
-    return s > best ? s : best
-  }, 0)
-  const activityStreak = getCurrentStreak(combinedActivity)
-  const streak = Math.max(directStreak, activityStreak)
+  const streak = getCurrentStreak(combinedActivity)
 
   // sparkline: use the first handle that has contestHistory
   const sparklineSource = handles.find(h => Array.isArray(h.snapshot?.raw_meta?.contestHistory))
@@ -556,6 +552,43 @@ router.post('/:id/sync-stream', async (req, res) => {
     Object.entries(handles || {}).filter(([, v]) => v && v.trim())
   )
 
+  // Check cooldown for friend's handles
+  const currentFriendHandles = friend.handles ?? []
+  let allInCooldown = Object.keys(toFetch).length > 0
+  let maxNextAllowed = null
+  const handleMap = new Map(currentFriendHandles.map((h) => [h.platform, h]))
+
+  for (const plat of Object.keys(toFetch)) {
+    const existing = handleMap.get(plat)
+    const target = (toFetch[plat] || '').trim().toLowerCase()
+    if (!existing || existing.handle?.toLowerCase() !== target || !existing.latestSnapshotId) {
+      allInCooldown = false
+      break
+    }
+    const nextAllowed = existing.nextRefreshAllowedAt ? new Date(existing.nextRefreshAllowedAt) : null
+    if (!nextAllowed || nextAllowed.getTime() <= Date.now()) {
+      allInCooldown = false
+      break
+    }
+    if (!maxNextAllowed || nextAllowed > maxNextAllowed) {
+      maxNextAllowed = nextAllowed
+    }
+  }
+
+  if (allInCooldown && maxNextAllowed) {
+    const retryAfterSeconds = Math.max(1, Math.ceil((maxNextAllowed.getTime() - Date.now()) / 1000))
+    res.setHeader('Retry-After', retryAfterSeconds)
+    const remainingMins = Math.ceil(retryAfterSeconds / 60)
+    return res.status(429).json({
+      error: {
+        code: 'COOLDOWN_ACTIVE',
+        message: `Friend profile was refreshed recently. Please wait ${remainingMins} minute${remainingMins === 1 ? '' : 's'} before refreshing again.`,
+        nextRefreshAllowedAt: maxNextAllowed.toISOString(),
+        retryAfterSeconds,
+      },
+    })
+  }
+
   // Configure SSE response headers
   res.setHeader('Content-Type', 'text/event-stream')
   res.setHeader('Cache-Control', 'no-cache, no-transform')
@@ -627,6 +660,7 @@ router.get('/:id', async (req, res) => {
          'handle',           pa.display_handle,
          'status',           pa.status,
          'lastSyncedAt',     pa.last_synced_at,
+         'nextRefreshAllowedAt', pa.next_refresh_allowed_at,
          'snapshot',         to_json(s)
        ) ORDER BY pa.platform) FILTER (WHERE pa.id IS NOT NULL), '[]'::json) AS handles
      FROM friends f
@@ -795,6 +829,20 @@ router.get('/:id', async (req, res) => {
     todayActivity,
     recentContests,
     profiles,
+    nextRefreshAllowedAt: (() => {
+      const dates = handles
+        .map((h) => (h.nextRefreshAllowedAt ? new Date(h.nextRefreshAllowedAt) : null))
+        .filter((d) => d && Number.isFinite(d.getTime()))
+        .sort((a, b) => b - a)
+      return dates[0] ? dates[0].toISOString() : null
+    })(),
+    cooldownRemainingSeconds: (() => {
+      const dates = handles
+        .map((h) => (h.nextRefreshAllowedAt ? new Date(h.nextRefreshAllowedAt) : null))
+        .filter((d) => d && Number.isFinite(d.getTime()))
+        .sort((a, b) => b - a)
+      return dates[0] ? Math.max(0, Math.ceil((dates[0].getTime() - Date.now()) / 1000)) : 0
+    })(),
   })
 })
 
